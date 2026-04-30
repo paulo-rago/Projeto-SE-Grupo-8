@@ -104,4 +104,18 @@ O funcionamento do sistema ocorre em etapas:
 
 ## Arquitetura do Sistema
 
+<div align="center">
+
+  <img src="https://github.com/user-attachments/assets/7dc21a72-74c5-4c3b-9887-662620999a3f" alt="Arquitetura de Software" width="100%">
+  <br>
+  <strong>Arquitetura de Software</strong>
+
+  <br><br>
+
+  <img src="https://github.com/user-attachments/assets/684b6dad-b9bd-4078-a117-07a2d3e8524c" alt="Arquitetura Física" width="100%">
+  <br>
+  <strong>Arquitetura Física</strong>
+
+</div>
+
 
