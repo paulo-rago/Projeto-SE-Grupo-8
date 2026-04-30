@@ -1,18 +1,23 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#define LED_PIN 5      // D5
+#define BUTTON_PIN 4   // D4
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  digitalWrite(LED_PIN, LOW); // LED começa apagado
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
+  int estadoBotao = digitalRead(BUTTON_PIN);
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  if (estadoBotao == LOW) {
+    // botão pressionado
+    digitalWrite(LED_PIN, HIGH);
+  } else {
+    // botão solto
+    digitalWrite(LED_PIN, LOW);
+  }
 }
