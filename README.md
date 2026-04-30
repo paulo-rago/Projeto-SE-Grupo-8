@@ -2,6 +2,8 @@
 
  # ReciLuz
 
+ > Acesse nosso Drive do projeto: [Google Drive - ReciLuz](https://drive.google.com/drive/folders/1JRUVSHJhsAoAntvT7IyG7CY1mx4hIjT3?usp=sharing)
+
 ## Descrição
 
 O **ReciLuz** é um projeto de IoT voltado para iluminação pública inteligente, inspirado no contexto urbano do Recife. A proposta é desenvolver um protótipo em escala reduzida de um poste inteligente capaz de controlar a iluminação de forma automática, detectar presença ou aproximação, estimar consumo elétrico e enviar informações para um painel de monitoramento.
