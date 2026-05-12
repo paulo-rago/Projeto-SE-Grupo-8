@@ -105,8 +105,8 @@ O funcionamento do sistema ocorre em etapas:
 ## Arquitetura do Sistema
 
 <div align="center">
-
-  <img src="https://github.com/user-attachments/assets/7dc21a72-74c5-4c3b-9887-662620999a3f" alt="Arquitetura de Software" width="100%">
+ 
+  <img width="1768" height="889" alt="image" src="https://github.com/user-attachments/assets/15fbb969-f10e-4aef-a057-b34c655838a6" />
   <br>
   <strong>Arquitetura de Software</strong>
 
