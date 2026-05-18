@@ -21,7 +21,7 @@ const char* MQTT_COMMAND_TOPIC = "reciluz/lampada/1/comando";
 #define PWM_FREQ 1000
 #define PWM_RESOLUTION 8 // brilho de 0 a 255
 
-const unsigned long INTERVALO_ENVIO_MS = 5000;
+const unsigned long INTERVALO_ENVIO_MS = 1500;
 const unsigned long INTERVALO_RECONEXAO_MQTT_MS = 5000;
 const unsigned long INTERVALO_RECONEXAO_WIFI_MS = 10000;
 const unsigned long ATRASO_LOOP_MS = 30;

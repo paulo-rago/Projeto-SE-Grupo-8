@@ -1,11 +1,22 @@
 const state = {
   busy: false,
   readings: [],
+  lastReadingId: null,
 };
 
 const els = {
   connection: document.querySelector("#connection"),
   connectionText: document.querySelector("#connectionText"),
+  freshness: document.querySelector("#freshness"),
+  freshnessText: document.querySelector("#freshnessText"),
+  heroStatus: document.querySelector("#heroStatus"),
+  heroTitle: document.querySelector("#heroTitle"),
+  heroSubtitle: document.querySelector("#heroSubtitle"),
+  heroPwm: document.querySelector("#heroPwm"),
+  pwmPercent: document.querySelector("#pwmPercent"),
+  pwmBar: document.querySelector("#pwmBar"),
+  distanceInline: document.querySelector("#distanceInline"),
+  distanceBar: document.querySelector("#distanceBar"),
   lampStatus: document.querySelector("#lampStatus"),
   lampName: document.querySelector("#lampName"),
   mode: document.querySelector("#mode"),
@@ -20,6 +31,7 @@ const els = {
   totalConsumption: document.querySelector("#totalConsumption"),
   averagePower: document.querySelector("#averagePower"),
   peakPower: document.querySelector("#peakPower"),
+  estimatedSavings: document.querySelector("#estimatedSavings"),
   energyWindow: document.querySelector("#energyWindow"),
   timeline: document.querySelector("#timeline"),
   chart: document.querySelector("#historyChart"),
@@ -42,6 +54,24 @@ function fmtNumber(value, digits = 1) {
   return Number(value).toFixed(digits);
 }
 
+function fmtEnergy(kwh) {
+  if (kwh === null || kwh === undefined || Number.isNaN(Number(kwh))) {
+    return "--";
+  }
+
+  const value = Number(kwh);
+  if (value >= 0.01) {
+    return `${value.toFixed(4)} kWh`;
+  }
+
+  const wh = value * 1000;
+  if (wh >= 0.01) {
+    return `${wh.toFixed(3)} Wh`;
+  }
+
+  return `${(wh * 1000).toFixed(2)} mWh`;
+}
+
 function fmtDate(value) {
   if (!value) {
     return "--";
@@ -54,10 +84,41 @@ function fmtDate(value) {
   });
 }
 
+function parseReadingDate(value) {
+  if (!value) {
+    return null;
+  }
+  return new Date(value);
+}
+
+function secondsSince(value) {
+  const date = parseReadingDate(value);
+  if (!date || Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+}
+
 function setConnection(online, text) {
   els.connection.classList.toggle("online", online);
   els.connection.classList.toggle("offline", !online);
   els.connectionText.textContent = text;
+}
+
+function setFreshness(latest) {
+  const age = secondsSince(latest?.criada_em);
+
+  if (age === null) {
+    els.freshness.classList.remove("online");
+    els.freshness.classList.add("offline");
+    els.freshnessText.textContent = "Sem leitura";
+    return;
+  }
+
+  const fresh = age <= 12;
+  els.freshness.classList.toggle("online", fresh);
+  els.freshness.classList.toggle("offline", !fresh);
+  els.freshnessText.textContent = fresh ? `Leitura há ${age}s` : `Desatualizado há ${age}s`;
 }
 
 async function api(path, options = {}) {
@@ -218,11 +279,11 @@ function drawEnergyChart(readings) {
   });
   ctx.stroke();
 
-  ctx.fillStyle = "#b97813";
+  ctx.fillStyle = "#17211d";
   ctx.font = "800 13px system-ui";
-  ctx.fillText("Potência", pad, 22);
+  ctx.fillText("Linha: potência instantânea", pad, 22);
   ctx.fillStyle = "#0f7a83";
-  ctx.fillText("Consumo por leitura", pad + 74, 22);
+  ctx.fillText("Barras: energia por amostra", pad + 190, 22);
 }
 
 function renderTimeline(readings) {
@@ -235,10 +296,10 @@ function renderTimeline(readings) {
     <article class="reading">
       <strong>${fmt(item.modo, item.status_lampada)}</strong>
       <dl>
-        <dt>Horario</dt><dd>${fmtDate(item.criada_em)}</dd>
-        <dt>Distancia</dt><dd>${fmtNumber(item.distancia_cm)} cm</dd>
+        <dt>Horário</dt><dd>${fmtDate(item.criada_em)}</dd>
+        <dt>Distância</dt><dd>${fmtNumber(item.distancia_cm)} cm</dd>
         <dt>PWM</dt><dd>${fmt(item.intensidade_pwm)}</dd>
-        <dt>Presenca</dt><dd>${item.presenca_detectada ? "sim" : "nao"}</dd>
+        <dt>Presença</dt><dd>${item.presenca_detectada ? "sim" : "não"}</dd>
       </dl>
     </article>
   `).join("");
@@ -246,6 +307,12 @@ function renderTimeline(readings) {
 
 function render(lamp, readings) {
   const latest = readings[0] || {};
+  const previousReadingId = state.lastReadingId;
+  state.lastReadingId = latest.id ?? null;
+  const pwm = Number(latest.intensidade_pwm || 0);
+  const pwmPercent = Math.round((pwm / 255) * 100);
+  const distance = Number(latest.distancia_cm);
+  const distancePercent = Number.isFinite(distance) ? Math.max(0, Math.min(100, (distance / 80) * 100)) : 0;
 
   els.lampStatus.textContent = fmt(lamp.status);
   els.lampName.textContent = fmt(lamp.nome, "Lampada 1");
@@ -257,7 +324,27 @@ function render(lamp, readings) {
   els.power.textContent = fmtNumber(latest.potencia, 2);
   els.consumption.textContent = `${fmtNumber(latest.consumo_estimado, 8)} kWh`;
   els.updatedAt.textContent = fmtDate(latest.criada_em);
-  els.sampleCount.textContent = `${readings.length} leituras`;
+  els.sampleCount.textContent = `Últimas ${readings.length} amostras`;
+  els.heroTitle.textContent = fmt(latest.modo, latest.status_lampada || "Aguardando dados");
+  els.heroSubtitle.textContent = latest.presenca_detectada
+    ? `Presença detectada a ${fmtNumber(latest.distancia_cm)} cm.`
+    : `Sem presença detectada. Última leitura às ${fmtDate(latest.criada_em)}.`;
+  els.heroPwm.textContent = fmt(latest.intensidade_pwm);
+  els.pwmPercent.textContent = Number.isFinite(pwmPercent) ? pwmPercent : "--";
+  els.pwmBar.style.width = `${Math.max(0, Math.min(100, pwmPercent || 0))}%`;
+  els.distanceInline.textContent = fmtNumber(latest.distancia_cm);
+  els.distanceBar.style.width = `${distancePercent}%`;
+  els.heroStatus.dataset.mode = latest.modo_remoto
+    ? "remote"
+    : latest.presenca_detectada
+      ? "presence"
+      : "night";
+  if (latest.id && previousReadingId && latest.id !== previousReadingId) {
+    els.heroStatus.classList.remove("pulse");
+    void els.heroStatus.offsetWidth;
+    els.heroStatus.classList.add("pulse");
+  }
+  setFreshness(latest);
 
   const energyReadings = readings.filter((item) => item.potencia !== null || item.consumo_estimado !== null);
   const totalConsumption = energyReadings.reduce((sum, item) => sum + Number(item.consumo_estimado || 0), 0);
@@ -266,11 +353,16 @@ function render(lamp, readings) {
   const peakPower = energyReadings.length
     ? Math.max(...energyReadings.map((item) => Number(item.potencia || 0)))
     : null;
+  const maxReferencePower = 10.2;
+  const estimatedSavings = averagePower === null
+    ? null
+    : Math.max(0, Math.min(100, ((maxReferencePower - averagePower) / maxReferencePower) * 100));
 
-  els.totalConsumption.textContent = fmtNumber(totalConsumption, 8);
+  els.totalConsumption.textContent = fmtEnergy(totalConsumption);
   els.averagePower.textContent = fmtNumber(averagePower, 2);
   els.peakPower.textContent = fmtNumber(peakPower, 2);
-  els.energyWindow.textContent = `${energyReadings.length} amostras`;
+  els.estimatedSavings.textContent = fmtNumber(estimatedSavings, 0);
+  els.energyWindow.textContent = `${energyReadings.length} amostras recentes`;
 
   renderTimeline(readings);
   drawChart(readings.slice(0, 24));
@@ -297,4 +389,4 @@ document.querySelector("#turnOff").addEventListener("click", () => sendCommand("
 document.querySelector("#autoMode").addEventListener("click", () => sendCommand("/lampada/automatico"));
 
 refresh();
-setInterval(refresh, 2500);
+setInterval(refresh, 1000);

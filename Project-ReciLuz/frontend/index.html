@@ -13,9 +13,15 @@
           <p class="eyebrow">ReciLuz</p>
           <h1>Dashboard operacional</h1>
         </div>
-        <div class="connection" id="connection">
-          <span class="dot"></span>
-          <span id="connectionText">Conectando</span>
+        <div class="top-status">
+          <div class="connection" id="connection">
+            <span class="dot"></span>
+            <span id="connectionText">Conectando</span>
+          </div>
+          <div class="connection freshness" id="freshness">
+            <span class="dot"></span>
+            <span id="freshnessText">Sem leitura</span>
+          </div>
         </div>
       </header>
 
@@ -32,6 +38,33 @@
           <span class="icon">A</span>
           Automático
         </button>
+      </section>
+
+      <section class="overview" aria-label="Resumo operacional">
+        <article class="hero-status" id="heroStatus">
+          <div>
+            <span>Situação atual</span>
+            <strong id="heroTitle">Aguardando dados</strong>
+            <p id="heroSubtitle">Quando a ESP32 enviar leituras, o painel atualiza automaticamente.</p>
+          </div>
+          <div class="hero-readout">
+            <span id="heroPwm">--</span>
+            <small>PWM atual</small>
+          </div>
+        </article>
+
+        <article class="quick-panel">
+          <div class="level-row">
+            <span>Brilho</span>
+            <strong><span id="pwmPercent">--</span>%</strong>
+          </div>
+          <div class="meter"><span id="pwmBar"></span></div>
+          <div class="level-row">
+            <span>Distância medida</span>
+            <strong><span id="distanceInline">--</span> cm</strong>
+          </div>
+          <div class="meter distance-meter"><span id="distanceBar"></span></div>
+        </article>
       </section>
 
       <section class="status-grid" aria-label="Indicadores principais">
@@ -66,10 +99,10 @@
         <article class="panel chart-panel">
           <div class="panel-heading">
             <div>
-              <h2>Historico recente</h2>
-              <p>Distancia e intensidade PWM</p>
+              <h2>Histórico recente</h2>
+              <p>Distância e intensidade PWM</p>
             </div>
-            <span id="sampleCount">0 leituras</span>
+            <span id="sampleCount">Últimas 0 amostras</span>
           </div>
           <canvas id="historyChart" width="900" height="320" aria-label="Grafico de leituras recentes"></canvas>
         </article>
@@ -77,8 +110,8 @@
         <aside class="panel timeline-panel">
           <div class="panel-heading">
             <div>
-              <h2>Ultimas leituras</h2>
-              <p>Atualizacao automatica</p>
+              <h2>Últimas leituras</h2>
+              <p>Registro do sensor</p>
             </div>
           </div>
           <div class="timeline" id="timeline"></div>
@@ -98,7 +131,7 @@
           <div class="energy-summary">
             <div>
               <span>Consumo acumulado</span>
-              <strong><span id="totalConsumption">--</span> kWh</strong>
+              <strong><span id="totalConsumption">--</span></strong>
             </div>
             <div>
               <span>Potência média</span>
@@ -107,6 +140,10 @@
             <div>
               <span>Potência máxima</span>
               <strong><span id="peakPower">--</span> W</strong>
+            </div>
+            <div>
+              <span>Economia estimada</span>
+              <strong><span id="estimatedSavings">--</span>%</strong>
             </div>
           </div>
 
