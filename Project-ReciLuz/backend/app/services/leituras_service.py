@@ -13,6 +13,9 @@ class LeituraService:
     Service for readings-related operations.
     """
 
+    POTENCIA_MAXIMA_W = 10.2
+    INTERVALO_LEITURA_HORAS = 5 / 3600
+
     @staticmethod
     def salvar_leitura(db: Session, leitura_data: LeituraCreate) -> Leitura:
         """
@@ -33,14 +36,27 @@ class LeituraService:
         if not lampada:
             raise HTTPException(status_code=404, detail="Lâmpada não encontrada")
 
+        potencia = leitura_data.potencia
+        consumo_estimado = leitura_data.consumo_estimado
+
+        if potencia is None and leitura_data.intensidade_pwm is not None:
+            fator_pwm = max(0, min(leitura_data.intensidade_pwm, 255)) / 255
+            potencia = round(fator_pwm * LeituraService.POTENCIA_MAXIMA_W, 2)
+
+        if consumo_estimado is None and potencia is not None:
+            consumo_estimado = round((potencia / 1000) * LeituraService.INTERVALO_LEITURA_HORAS, 8)
+
         # Create reading
         leitura = Leitura(
             lampada_id=leitura_data.lampada_id,
             status_lampada=leitura_data.status_lampada,
             intensidade_pwm=leitura_data.intensidade_pwm,
+            distancia_cm=leitura_data.distancia_cm,
+            modo=leitura_data.modo,
+            modo_remoto=leitura_data.modo_remoto,
             corrente=leitura_data.corrente,
-            potencia=leitura_data.potencia,
-            consumo_estimado=leitura_data.consumo_estimado,
+            potencia=potencia,
+            consumo_estimado=consumo_estimado,
             presenca_detectada=leitura_data.presenca_detectada,
             temperatura=leitura_data.temperatura,
             umidade=leitura_data.umidade,

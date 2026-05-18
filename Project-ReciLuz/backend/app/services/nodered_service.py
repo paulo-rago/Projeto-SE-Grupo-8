@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-NODE_RED_COMMAND_URL = os.getenv("NODE_RED_COMMAND_URL", "http://localhost:1880/comando-lampada")
+NODE_RED_COMMAND_URL = os.getenv("NODE_RED_COMMAND_URL", "http://127.0.0.1:1880/comando-lampada")
 
 
 class NodeRedService:
@@ -17,7 +17,7 @@ class NodeRedService:
     """
 
     @staticmethod
-    def enviar_comando_lampada(lampada_id: int, ligada: bool) -> bool:
+    def enviar_comando_lampada(lampada_id: int, ligada: bool | None = None, automatico: bool = False) -> bool:
         """
         Send lamp command to Node-RED.
 
@@ -29,10 +29,11 @@ class NodeRedService:
             True if successful, False otherwise
         """
         try:
-            payload = {
-                "lampada_id": lampada_id,
-                "ligada": ligada
-            }
+            payload = {"lampada_id": lampada_id}
+            if automatico:
+                payload["automatico"] = True
+            else:
+                payload["ligada"] = ligada
 
             response = requests.post(
                 NODE_RED_COMMAND_URL,

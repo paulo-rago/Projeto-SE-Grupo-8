@@ -41,6 +41,9 @@ class LeituraBase(BaseModel):
     lampada_id: int
     status_lampada: str
     intensidade_pwm: Optional[int] = None
+    distancia_cm: Optional[float] = None
+    modo: Optional[str] = None
+    modo_remoto: Optional[bool] = None
     corrente: Optional[float] = None
     potencia: Optional[float] = None
     consumo_estimado: Optional[float] = None

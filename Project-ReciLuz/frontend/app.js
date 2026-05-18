@@ -1,0 +1,300 @@
+const state = {
+  busy: false,
+  readings: [],
+};
+
+const els = {
+  connection: document.querySelector("#connection"),
+  connectionText: document.querySelector("#connectionText"),
+  lampStatus: document.querySelector("#lampStatus"),
+  lampName: document.querySelector("#lampName"),
+  mode: document.querySelector("#mode"),
+  remoteMode: document.querySelector("#remoteMode"),
+  distance: document.querySelector("#distance"),
+  presence: document.querySelector("#presence"),
+  pwm: document.querySelector("#pwm"),
+  power: document.querySelector("#power"),
+  consumption: document.querySelector("#consumption"),
+  updatedAt: document.querySelector("#updatedAt"),
+  sampleCount: document.querySelector("#sampleCount"),
+  totalConsumption: document.querySelector("#totalConsumption"),
+  averagePower: document.querySelector("#averagePower"),
+  peakPower: document.querySelector("#peakPower"),
+  energyWindow: document.querySelector("#energyWindow"),
+  timeline: document.querySelector("#timeline"),
+  chart: document.querySelector("#historyChart"),
+  energyChart: document.querySelector("#energyChart"),
+  buttons: [
+    document.querySelector("#turnOn"),
+    document.querySelector("#turnOff"),
+    document.querySelector("#autoMode"),
+  ],
+};
+
+function fmt(value, fallback = "--") {
+  return value === null || value === undefined || value === "" ? fallback : value;
+}
+
+function fmtNumber(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "--";
+  }
+  return Number(value).toFixed(digits);
+}
+
+function fmtDate(value) {
+  if (!value) {
+    return "--";
+  }
+  const normalized = typeof value === "string" && !value.includes("Z") ? value : value;
+  return new Date(normalized).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function setConnection(online, text) {
+  els.connection.classList.toggle("online", online);
+  els.connection.classList.toggle("offline", !online);
+  els.connectionText.textContent = text;
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { Accept: "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function sendCommand(path) {
+  if (state.busy) {
+    return;
+  }
+
+  state.busy = true;
+  els.buttons.forEach((button) => {
+    button.disabled = true;
+  });
+
+  try {
+    await api(path, { method: "POST" });
+    await refresh();
+  } catch (error) {
+    setConnection(false, "Erro no comando");
+    console.error(error);
+  } finally {
+    state.busy = false;
+    els.buttons.forEach((button) => {
+      button.disabled = false;
+    });
+  }
+}
+
+function drawChart(readings) {
+  const canvas = els.chart;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const pad = 36;
+  const data = readings.slice().reverse();
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#f6f8f7";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = "#dce3df";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i += 1) {
+    const y = pad + ((height - pad * 2) / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(width - pad, y);
+    ctx.stroke();
+  }
+
+  if (data.length < 2) {
+    ctx.fillStyle = "#66736d";
+    ctx.font = "700 18px system-ui";
+    ctx.fillText("Aguardando leituras", pad, height / 2);
+    return;
+  }
+
+  function x(index) {
+    return pad + ((width - pad * 2) / (data.length - 1)) * index;
+  }
+
+  function y(value, max) {
+    const safe = Math.max(0, Math.min(Number(value || 0), max));
+    return height - pad - (safe / max) * (height - pad * 2);
+  }
+
+  function line(values, color, max) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    values.forEach((value, index) => {
+      const px = x(index);
+      const py = y(value, max);
+      if (index === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+    });
+    ctx.stroke();
+  }
+
+  line(data.map((item) => item.intensidade_pwm), "#16845b", 255);
+  line(data.map((item) => item.distancia_cm), "#0f7a83", 80);
+
+  ctx.fillStyle = "#17211d";
+  ctx.font = "800 13px system-ui";
+  ctx.fillText("PWM", pad, 22);
+  ctx.fillStyle = "#0f7a83";
+  ctx.fillText("Distancia", pad + 56, 22);
+}
+
+function drawEnergyChart(readings) {
+  const canvas = els.energyChart;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const pad = 34;
+  const data = readings.slice().reverse();
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#f6f8f7";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = "#dce3df";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i += 1) {
+    const y = pad + ((height - pad * 2) / 3) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(width - pad, y);
+    ctx.stroke();
+  }
+
+  if (data.length < 2) {
+    ctx.fillStyle = "#66736d";
+    ctx.font = "700 16px system-ui";
+    ctx.fillText("Aguardando consumo", pad, height / 2);
+    return;
+  }
+
+  const maxPower = Math.max(10.2, ...data.map((item) => Number(item.potencia || 0)));
+  const maxConsumption = Math.max(0.00002, ...data.map((item) => Number(item.consumo_estimado || 0)));
+  const barWidth = Math.max(6, (width - pad * 2) / data.length - 5);
+
+  data.forEach((item, index) => {
+    const value = Number(item.consumo_estimado || 0);
+    const x = pad + ((width - pad * 2) / data.length) * index + 2;
+    const barHeight = (value / maxConsumption) * (height - pad * 2);
+    ctx.fillStyle = "rgba(15, 122, 131, 0.28)";
+    ctx.fillRect(x, height - pad - barHeight, barWidth, barHeight);
+  });
+
+  ctx.strokeStyle = "#b97813";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  data.forEach((item, index) => {
+    const x = pad + ((width - pad * 2) / (data.length - 1)) * index;
+    const value = Number(item.potencia || 0);
+    const y = height - pad - (value / maxPower) * (height - pad * 2);
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = "#b97813";
+  ctx.font = "800 13px system-ui";
+  ctx.fillText("Potência", pad, 22);
+  ctx.fillStyle = "#0f7a83";
+  ctx.fillText("Consumo por leitura", pad + 74, 22);
+}
+
+function renderTimeline(readings) {
+  if (!readings.length) {
+    els.timeline.innerHTML = '<div class="reading"><strong>Sem leituras ainda</strong></div>';
+    return;
+  }
+
+  els.timeline.innerHTML = readings.slice(0, 8).map((item) => `
+    <article class="reading">
+      <strong>${fmt(item.modo, item.status_lampada)}</strong>
+      <dl>
+        <dt>Horario</dt><dd>${fmtDate(item.criada_em)}</dd>
+        <dt>Distancia</dt><dd>${fmtNumber(item.distancia_cm)} cm</dd>
+        <dt>PWM</dt><dd>${fmt(item.intensidade_pwm)}</dd>
+        <dt>Presenca</dt><dd>${item.presenca_detectada ? "sim" : "nao"}</dd>
+      </dl>
+    </article>
+  `).join("");
+}
+
+function render(lamp, readings) {
+  const latest = readings[0] || {};
+
+  els.lampStatus.textContent = fmt(lamp.status);
+  els.lampName.textContent = fmt(lamp.nome, "Lampada 1");
+  els.mode.textContent = fmt(latest.modo, latest.status_lampada || "--");
+  els.remoteMode.textContent = latest.modo_remoto ? "Controle remoto" : "Sensor automático";
+  els.distance.textContent = fmtNumber(latest.distancia_cm);
+  els.presence.textContent = latest.presenca_detectada ? "Presença detectada" : "Sem presença";
+  els.pwm.textContent = fmt(latest.intensidade_pwm);
+  els.power.textContent = fmtNumber(latest.potencia, 2);
+  els.consumption.textContent = `${fmtNumber(latest.consumo_estimado, 8)} kWh`;
+  els.updatedAt.textContent = fmtDate(latest.criada_em);
+  els.sampleCount.textContent = `${readings.length} leituras`;
+
+  const energyReadings = readings.filter((item) => item.potencia !== null || item.consumo_estimado !== null);
+  const totalConsumption = energyReadings.reduce((sum, item) => sum + Number(item.consumo_estimado || 0), 0);
+  const totalPower = energyReadings.reduce((sum, item) => sum + Number(item.potencia || 0), 0);
+  const averagePower = energyReadings.length ? totalPower / energyReadings.length : null;
+  const peakPower = energyReadings.length
+    ? Math.max(...energyReadings.map((item) => Number(item.potencia || 0)))
+    : null;
+
+  els.totalConsumption.textContent = fmtNumber(totalConsumption, 8);
+  els.averagePower.textContent = fmtNumber(averagePower, 2);
+  els.peakPower.textContent = fmtNumber(peakPower, 2);
+  els.energyWindow.textContent = `${energyReadings.length} amostras`;
+
+  renderTimeline(readings);
+  drawChart(readings.slice(0, 24));
+  drawEnergyChart(readings.slice(0, 24));
+}
+
+async function refresh() {
+  try {
+    const [lamp, readings] = await Promise.all([
+      api("/lampada/status"),
+      api("/leituras?limite=40"),
+    ]);
+    state.readings = readings;
+    render(lamp, readings);
+    setConnection(true, "Online");
+  } catch (error) {
+    setConnection(false, "Sem dados");
+    console.error(error);
+  }
+}
+
+document.querySelector("#turnOn").addEventListener("click", () => sendCommand("/lampada/ligar"));
+document.querySelector("#turnOff").addEventListener("click", () => sendCommand("/lampada/desligar"));
+document.querySelector("#autoMode").addEventListener("click", () => sendCommand("/lampada/automatico"));
+
+refresh();
+setInterval(refresh, 2500);

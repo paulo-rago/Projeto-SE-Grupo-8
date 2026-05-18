@@ -42,3 +42,14 @@ def desligar_lampada(db: Session = Depends(get_db)):
         Success message
     """
     return LampadaService.desligar_lampada(db, lampada_id=1)
+
+
+@router.post("/automatico", response_model=MensagemResposta)
+def ativar_modo_automatico(db: Session = Depends(get_db)):
+    """
+    Return lamp ID 1 to automatic sensor control.
+
+    Returns:
+        Success message
+    """
+    return LampadaService.ativar_modo_automatico(db, lampada_id=1)

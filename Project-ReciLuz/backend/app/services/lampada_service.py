@@ -113,3 +113,24 @@ class LampadaService:
         db.refresh(lampada)
 
         return {"mensagem": "Lâmpada desligada com sucesso"}
+
+    @staticmethod
+    def ativar_modo_automatico(db: Session, lampada_id: int):
+        """
+        Return lamp control to the ESP32 proximity sensor.
+        """
+        lampada = LampadaService.obter_lampada(db, lampada_id)
+
+        sucesso_nodered = NodeRedService.enviar_comando_lampada(lampada_id, automatico=True)
+
+        if not sucesso_nodered:
+            raise HTTPException(
+                status_code=503,
+                detail="Falha ao enviar comando para Node-RED. Verifique se o Node-RED está online."
+            )
+
+        lampada.status = "automatico"
+        db.commit()
+        db.refresh(lampada)
+
+        return {"mensagem": "Modo automático ativado com sucesso"}

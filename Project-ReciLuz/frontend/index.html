@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReciLuz Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">ReciLuz</p>
+          <h1>Dashboard operacional</h1>
+        </div>
+        <div class="connection" id="connection">
+          <span class="dot"></span>
+          <span id="connectionText">Conectando</span>
+        </div>
+      </header>
+
+      <section class="control-strip" aria-label="Controles da lampada">
+        <button class="action action-on" id="turnOn" type="button">
+          <span class="icon">I</span>
+          Ligar
+        </button>
+        <button class="action action-off" id="turnOff" type="button">
+          <span class="icon">O</span>
+          Desligar
+        </button>
+        <button class="action action-auto" id="autoMode" type="button">
+          <span class="icon">A</span>
+          Automático
+        </button>
+      </section>
+
+      <section class="status-grid" aria-label="Indicadores principais">
+        <article class="metric">
+          <span>Status</span>
+          <strong id="lampStatus">--</strong>
+          <small id="lampName">Lampada 1</small>
+        </article>
+        <article class="metric">
+          <span>Modo</span>
+          <strong id="mode">--</strong>
+          <small id="remoteMode">--</small>
+        </article>
+        <article class="metric">
+          <span>Distância</span>
+          <strong><span id="distance">--</span> cm</strong>
+          <small id="presence">--</small>
+        </article>
+        <article class="metric">
+          <span>PWM</span>
+          <strong><span id="pwm">--</span> / 255</strong>
+          <small id="updatedAt">--</small>
+        </article>
+        <article class="metric">
+          <span>Potência</span>
+          <strong><span id="power">--</span> W</strong>
+          <small id="consumption">-- kWh</small>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <article class="panel chart-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Historico recente</h2>
+              <p>Distancia e intensidade PWM</p>
+            </div>
+            <span id="sampleCount">0 leituras</span>
+          </div>
+          <canvas id="historyChart" width="900" height="320" aria-label="Grafico de leituras recentes"></canvas>
+        </article>
+
+        <aside class="panel timeline-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Ultimas leituras</h2>
+              <p>Atualizacao automatica</p>
+            </div>
+          </div>
+          <div class="timeline" id="timeline"></div>
+        </aside>
+      </section>
+
+      <section class="energy-section" aria-label="Consumo de energia">
+        <article class="panel energy-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Consumo estimado</h2>
+              <p>Potência e energia nas leituras recentes</p>
+            </div>
+            <span id="energyWindow">0 amostras</span>
+          </div>
+
+          <div class="energy-summary">
+            <div>
+              <span>Consumo acumulado</span>
+              <strong><span id="totalConsumption">--</span> kWh</strong>
+            </div>
+            <div>
+              <span>Potência média</span>
+              <strong><span id="averagePower">--</span> W</strong>
+            </div>
+            <div>
+              <span>Potência máxima</span>
+              <strong><span id="peakPower">--</span> W</strong>
+            </div>
+          </div>
+
+          <canvas id="energyChart" width="900" height="260" aria-label="Grafico de consumo estimado"></canvas>
+        </article>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

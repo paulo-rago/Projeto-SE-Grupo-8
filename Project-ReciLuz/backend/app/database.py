@@ -4,6 +4,7 @@ Database configuration and initialization.
 
 import os
 from sqlalchemy import create_engine
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from app.base import Base
@@ -22,6 +23,28 @@ engine = create_engine(
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def _migrar_sqlite():
+    """
+    Add dashboard columns to an existing SQLite database.
+    """
+    if "sqlite" not in DATABASE_URL:
+        return
+
+    colunas_novas = {
+        "distancia_cm": "FLOAT",
+        "modo": "VARCHAR",
+        "modo_remoto": "BOOLEAN",
+    }
+
+    with engine.begin() as connection:
+        colunas_existentes = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(leituras)"))
+        }
+        for nome, tipo in colunas_novas.items():
+            if nome not in colunas_existentes:
+                connection.execute(text(f"ALTER TABLE leituras ADD COLUMN {nome} {tipo}"))
 
 
 def get_db():
@@ -44,6 +67,7 @@ def init_db():
 
     # Create all tables
     Base.metadata.create_all(bind=engine)
+    _migrar_sqlite()
 
     # Create default lamp if it doesn't exist
     db = SessionLocal()
