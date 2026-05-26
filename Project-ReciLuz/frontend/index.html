@@ -8,155 +8,240 @@
   </head>
   <body>
     <main class="shell">
+
+      <!-- Floating header -->
       <header class="topbar">
-        <div>
-          <p class="eyebrow">ReciLuz</p>
-          <h1>Dashboard operacional</h1>
-        </div>
+        <h1>ReciLuz</h1>
         <div class="top-status">
           <div class="connection" id="connection">
             <span class="dot"></span>
-            <span id="connectionText">Conectando</span>
+            <span id="connectionText" class="sr-only">Conectando</span>
           </div>
           <div class="connection freshness" id="freshness">
             <span class="dot"></span>
-            <span id="freshnessText">Sem leitura</span>
+            <span id="freshnessText" class="sr-only">Sem leitura</span>
           </div>
         </div>
       </header>
 
-      <section class="control-strip" aria-label="Controles da lampada">
-        <button class="action action-on" id="turnOn" type="button">
-          <span class="icon">I</span>
-          Ligar
-        </button>
-        <button class="action action-off" id="turnOff" type="button">
-          <span class="icon">O</span>
-          Desligar
-        </button>
-        <button class="action action-auto" id="autoMode" type="button">
-          <span class="icon">A</span>
-          Automático
-        </button>
+      <!-- UISwitch controls -->
+      <section class="controls-section" aria-label="Controles da lâmpada">
+
+        <div class="toggle-card glass-card" id="manualToggleCard">
+          <span class="toggle-label">LÂMPADA</span>
+          <label class="switch" aria-label="Ligar ou desligar a lâmpada manualmente">
+            <input type="checkbox" id="lampToggle" />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+          <span class="toggle-status" id="lampToggleStatus">Desligada</span>
+        </div>
+
+        <div class="toggle-card glass-card">
+          <span class="toggle-label">AUTOMÁTICO</span>
+          <label class="switch switch-teal" aria-label="Ativar modo automático por sensor de proximidade">
+            <input type="checkbox" id="autoToggle" />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+          <span class="toggle-status" id="autoToggleStatus">Manual</span>
+        </div>
+
       </section>
 
-      <section class="overview" aria-label="Resumo operacional">
-        <article class="hero-status" id="heroStatus">
-          <div>
-            <span>Situação atual</span>
+      <!-- Hero status card -->
+      <section class="hero-section" aria-label="Situação atual">
+        <article class="hero-status glass-card" id="heroStatus">
+          <div class="hero-main">
+            <span class="hero-label">Situação atual</span>
             <strong id="heroTitle">Aguardando dados</strong>
             <p id="heroSubtitle">Quando a ESP32 enviar leituras, o painel atualiza automaticamente.</p>
           </div>
-          <div class="hero-readout">
-            <span id="heroPwm">--</span>
-            <small>PWM atual</small>
+          <div class="hero-right">
+            <div class="hero-readout">
+              <span id="heroPwm">--</span>
+              <small>PWM · <span id="pwmPercent">--</span>%</small>
+            </div>
+            <div class="pwm-track">
+              <div class="pwm-fill" id="pwmBar"></div>
+            </div>
           </div>
-        </article>
-
-        <article class="quick-panel">
-          <div class="level-row">
-            <span>Brilho</span>
-            <strong><span id="pwmPercent">--</span>%</strong>
+          <div hidden>
+            <span id="distanceInline">--</span>
+            <span id="distanceBar"></span>
           </div>
-          <div class="meter"><span id="pwmBar"></span></div>
-          <div class="level-row">
-            <span>Distância medida</span>
-            <strong><span id="distanceInline">--</span> cm</strong>
-          </div>
-          <div class="meter distance-meter"><span id="distanceBar"></span></div>
         </article>
       </section>
 
-      <section class="status-grid" aria-label="Indicadores principais">
-        <article class="metric">
-          <span>Status</span>
+      <!-- Metrics 2×3 grid -->
+      <section class="metrics-grid" aria-label="Indicadores principais">
+        <article class="metric-tile glass-card">
           <strong id="lampStatus">--</strong>
+          <span class="tile-label">Status</span>
           <small id="lampName">Lampada 1</small>
         </article>
-        <article class="metric">
-          <span>Modo</span>
+        <article class="metric-tile glass-card">
           <strong id="mode">--</strong>
+          <span class="tile-label">Modo</span>
           <small id="remoteMode">--</small>
         </article>
-        <article class="metric">
-          <span>Distância</span>
-          <strong><span id="distance">--</span> cm</strong>
+        <article class="metric-tile glass-card">
+          <strong><span id="distance">--</span><em> cm</em></strong>
+          <span class="tile-label">Distância</span>
           <small id="presence">--</small>
         </article>
-        <article class="metric">
-          <span>PWM</span>
-          <strong><span id="pwm">--</span> / 255</strong>
+        <article class="metric-tile glass-card">
+          <strong><span id="pwm">--</span><em>/255</em></strong>
+          <span class="tile-label">PWM</span>
           <small id="updatedAt">--</small>
         </article>
-        <article class="metric">
-          <span>Corrente</span>
-          <strong><span id="current">--</span> A</strong>
+        <article class="metric-tile glass-card">
+          <strong><span id="current">--</span><em> A</em></strong>
+          <span class="tile-label">Corrente</span>
           <small>ACS712</small>
         </article>
-        <article class="metric">
-          <span>Potência</span>
-          <strong><span id="power">--</span> W</strong>
+        <article class="metric-tile glass-card">
+          <strong><span id="power">--</span><em> W</em></strong>
+          <span class="tile-label">Potência</span>
           <small id="consumption">-- kWh</small>
         </article>
       </section>
 
-      <section class="workspace">
-        <article class="panel chart-panel">
-          <div class="panel-heading">
-            <div>
-              <h2>Histórico recente</h2>
-              <p>Distância e intensidade PWM</p>
+      <!-- Three analytics dashboards -->
+      <section class="dashboards-row">
+
+        <!-- Consumo Estimado -->
+        <article class="panel glass-card consumo-panel">
+          <header class="panel-heading">
+            <div class="panel-title">
+              <h2>Consumo Estimado</h2>
+              <p>Energia nas últimas leituras</p>
             </div>
-            <span id="sampleCount">Últimas 0 amostras</span>
+            <span class="panel-badge" id="energyWindow">0 amostras</span>
+          </header>
+          <div class="stats-2x2">
+            <div class="stat-item">
+              <small>Acumulado</small>
+              <strong id="totalConsumption">--</strong>
+            </div>
+            <div class="stat-item">
+              <small>Potência média</small>
+              <strong><span id="averagePower">--</span><em> W</em></strong>
+            </div>
+            <div class="stat-item">
+              <small>Potência máxima</small>
+              <strong><span id="peakPower">--</span><em> W</em></strong>
+            </div>
+            <div class="stat-item">
+              <small>Tempo ligada</small>
+              <strong id="tempoLigada">--</strong>
+            </div>
           </div>
-          <canvas id="historyChart" width="900" height="320" aria-label="Grafico de leituras recentes"></canvas>
+          <div class="chart-area">
+            <div class="empty-state" id="energyEmptyState">
+              <span class="empty-icon" aria-hidden="true">⚡</span>
+              <p>Sem dados ainda</p>
+            </div>
+            <canvas id="energyChart" width="900" height="200" class="hidden" aria-label="Gráfico de consumo estimado"></canvas>
+          </div>
         </article>
 
-        <aside class="panel timeline-panel">
-          <div class="panel-heading">
-            <div>
-              <h2>Últimas leituras</h2>
-              <p>Registro do sensor</p>
+        <!-- Eficiência Energética -->
+        <article class="panel glass-card eficiencia-panel">
+          <header class="panel-heading">
+            <div class="panel-title">
+              <h2>Eficiência Energética</h2>
+            </div>
+          </header>
+          <div class="eficiencia-body">
+            <div class="ring-wrapper">
+              <svg class="progress-ring" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ring-bg" cx="60" cy="60" r="52" />
+                <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="52" />
+              </svg>
+              <div class="ring-label">
+                <span id="eficienciaPercent">--</span>
+                <small>%</small>
+              </div>
+            </div>
+            <div class="eficiencia-stats">
+              <div class="presence-bar-wrap">
+                <span class="tiny-label">Leituras com presença</span>
+                <div class="presence-bar">
+                  <div class="presence-fill" id="presenceFill"></div>
+                </div>
+                <div class="presence-counts">
+                  <span id="presencaComLabel">-- c/ presença</span>
+                  <span id="presencaSemLabel">-- sem</span>
+                </div>
+              </div>
+              <div class="pwm-medio-row">
+                <span class="tiny-label">Intensidade média do LED</span>
+                <strong id="pwmMedio">--</strong>
+              </div>
             </div>
           </div>
-          <div class="timeline" id="timeline"></div>
-        </aside>
-      </section>
-
-      <section class="energy-section" aria-label="Consumo de energia">
-        <article class="panel energy-panel">
-          <div class="panel-heading">
-            <div>
-              <h2>Consumo estimado</h2>
-              <p>Potência e energia nas leituras recentes</p>
-            </div>
-            <span id="energyWindow">0 amostras</span>
-          </div>
-
-          <div class="energy-summary">
-            <div>
-              <span>Consumo acumulado</span>
-              <strong><span id="totalConsumption">--</span></strong>
-            </div>
-            <div>
-              <span>Potência média</span>
-              <strong><span id="averagePower">--</span> W</strong>
-            </div>
-            <div>
-              <span>Potência máxima</span>
-              <strong><span id="peakPower">--</span> W</strong>
-            </div>
-            <div>
-              <span>Economia estimada</span>
-              <strong><span id="estimatedSavings">--</span>%</strong>
-            </div>
-          </div>
-
-          <canvas id="energyChart" width="900" height="260" aria-label="Grafico de consumo estimado"></canvas>
         </article>
+
+        <!-- Economia Estimada -->
+        <article class="panel glass-card economia-panel">
+          <header class="panel-heading">
+            <div class="panel-title">
+              <h2>Economia Estimada</h2>
+              <p>Comparado a lâmpada convencional</p>
+            </div>
+          </header>
+          <div class="economia-body">
+            <div class="economia-ref">
+              <span class="tiny-label">Referência</span>
+              <span>Lâmpada 60W contínua</span>
+            </div>
+            <div class="economia-big">
+              <strong id="economiaPercent">--</strong>
+              <small>% de energia economizada</small>
+            </div>
+            <div class="stats-3col">
+              <div class="stat-item">
+                <small>Consumo real</small>
+                <strong id="consumoReal">--</strong>
+              </div>
+              <div class="stat-item">
+                <small>Referência</small>
+                <strong id="consumoRef">--</strong>
+              </div>
+              <div class="stat-item stat-green">
+                <small>Economia</small>
+                <strong id="economiaKwh">--</strong>
+              </div>
+            </div>
+            <div class="comparison-bars">
+              <div class="comp-row">
+                <span class="tiny-label">Referência (60W)</span>
+                <div class="comp-track">
+                  <div class="comp-fill comp-fill-ref" id="compFillRef"></div>
+                </div>
+              </div>
+              <div class="comp-row">
+                <span class="tiny-label">Consumo real</span>
+                <div class="comp-track">
+                  <div class="comp-fill comp-fill-real" id="compFillReal"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
       </section>
+
+      <!-- Hidden legacy bindings — JS compatibility -->
+      <div hidden aria-hidden="true">
+        <button id="turnOn" type="button">Ligar</button>
+        <button id="turnOff" type="button">Desligar</button>
+        <span id="estimatedSavings">--</span>
+        <span id="sampleCount">--</span>
+        <canvas id="historyChart" width="900" height="320"></canvas>
+        <div id="timeline"></div>
+      </div>
+
     </main>
-
     <script src="/static/app.js"></script>
   </body>
 </html>
