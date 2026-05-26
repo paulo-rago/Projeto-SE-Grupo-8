@@ -24,6 +24,7 @@ const els = {
   distance: document.querySelector("#distance"),
   presence: document.querySelector("#presence"),
   pwm: document.querySelector("#pwm"),
+  current: document.querySelector("#current"),
   power: document.querySelector("#power"),
   consumption: document.querySelector("#consumption"),
   updatedAt: document.querySelector("#updatedAt"),
@@ -299,6 +300,7 @@ function renderTimeline(readings) {
         <dt>Horário</dt><dd>${fmtDate(item.criada_em)}</dd>
         <dt>Distância</dt><dd>${fmtNumber(item.distancia_cm)} cm</dd>
         <dt>PWM</dt><dd>${fmt(item.intensidade_pwm)}</dd>
+        <dt>Corrente</dt><dd>${fmtNumber(item.corrente, 3)} A</dd>
         <dt>Presença</dt><dd>${item.presenca_detectada ? "sim" : "não"}</dd>
       </dl>
     </article>
@@ -321,6 +323,7 @@ function render(lamp, readings) {
   els.distance.textContent = fmtNumber(latest.distancia_cm);
   els.presence.textContent = latest.presenca_detectada ? "Presença detectada" : "Sem presença";
   els.pwm.textContent = fmt(latest.intensidade_pwm);
+  els.current.textContent = fmtNumber(latest.corrente, 3);
   els.power.textContent = fmtNumber(latest.potencia, 2);
   els.consumption.textContent = `${fmtNumber(latest.consumo_estimado, 8)} kWh`;
   els.updatedAt.textContent = fmtDate(latest.criada_em);

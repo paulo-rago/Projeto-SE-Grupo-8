@@ -3,35 +3,49 @@
 #include <HTTPClient.h>
 #include <PubSubClient.h>
 
-const char* WIFI_SSID = "uaifai-brum";
+const char* WIFI_SSID = "uaifai-tiradentes";
 const char* WIFI_PASSWORD = "bemvindoaocesar";
-const char* BACKEND_URL = "http://172.26.116.115:1880/leituras";
-const char* MQTT_BROKER = "172.26.116.115";
+const char* BACKEND_URL = "http://172.26.65.95:1880/leituras";
+const char* MQTT_BROKER = "172.26.65.95";
 const int MQTT_PORT = 1883;
 const char* MQTT_CLIENT_ID = "reciluz-esp32-01";
 const char* MQTT_COMMAND_TOPIC = "reciluz/lampada/1/comando";
 
-#define LED_PIN 4        // LED no GPIO 4
-#define BUTTON_PIN 19    // Botão no GPIO 19
-
-#define TRIG_PIN 25      // Trig do sensor ultrassônico
-#define ECHO_PIN 26      // Echo do sensor ultrassônico
+#define MOSFET_PIN 18
+#define CURRENT_SENSOR_PIN 35
+#define TRIG_PIN 33
+#define ECHO_PIN 26
+#define BUTTON_PIN 19
 
 #define PWM_CHANNEL 0
 #define PWM_FREQ 1000
-#define PWM_RESOLUTION 8 // brilho de 0 a 255
+#define PWM_RESOLUTION 8
+
+#define ADC_MAX 4095.0
+#define VREF 3.3
+#define ACS712_SENSIBILIDADE 0.122
+#define ACS712_RUIDO_MINIMO_A 0.05
+#define TENSAO_LAMPADA 12.0
+
+#define DISTANCIA_MIN_CM 5.0
+#define DISTANCIA_MAX_CM 40.0
+#define BRILHO_MINIMO 8
+#define BRILHO_MAXIMO 255
+#define BRILHO_SEM_PRESENCA 0
 
 const unsigned long INTERVALO_ENVIO_MS = 1500;
 const unsigned long INTERVALO_RECONEXAO_MQTT_MS = 5000;
 const unsigned long INTERVALO_RECONEXAO_WIFI_MS = 10000;
-const unsigned long ATRASO_LOOP_MS = 30;
-unsigned long ultimoEnvio = 0;
-unsigned long ultimaTentativaMqtt = 0;
-unsigned long ultimaTentativaWiFi = 0;
+const unsigned long ATRASO_LOOP_MS = 80;
 
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
+unsigned long ultimoEnvio = 0;
+unsigned long ultimaTentativaMqtt = 0;
+unsigned long ultimaTentativaWiFi = 0;
+
+float offsetSensor = 0.0;
 bool modoRemotoAtivo = false;
 bool lampadaRemotaLigada = false;
 
@@ -43,14 +57,64 @@ float medirDistancia() {
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
-  long duracao = pulseIn(ECHO_PIN, HIGH, 15000);
+  long duracao = pulseIn(ECHO_PIN, HIGH, 25000);
 
   if (duracao == 0) {
     return -1;
   }
 
-  float distancia = duracao * 0.034 / 2;
-  return distancia;
+  return duracao * 0.034 / 2;
+}
+
+int calcularBrilhoAutomatico(float distancia) {
+  if (distancia < 0 || distancia > DISTANCIA_MAX_CM) {
+    return BRILHO_SEM_PRESENCA;
+  }
+
+  float distanciaLimitada = constrain(distancia, DISTANCIA_MIN_CM, DISTANCIA_MAX_CM);
+  int brilho = map(
+    (int)(distanciaLimitada * 10),
+    (int)(DISTANCIA_MAX_CM * 10),
+    (int)(DISTANCIA_MIN_CM * 10),
+    BRILHO_MINIMO,
+    BRILHO_MAXIMO
+  );
+
+  return constrain(brilho, BRILHO_MINIMO, BRILHO_MAXIMO);
+}
+
+float lerTensaoSensor() {
+  long soma = 0;
+
+  for (int i = 0; i < 80; i++) {
+    soma += analogRead(CURRENT_SENSOR_PIN);
+    delayMicroseconds(500);
+  }
+
+  float media = soma / 80.0;
+  return (media * VREF) / ADC_MAX;
+}
+
+void calibrarSensorCorrente() {
+  ledcWrite(PWM_CHANNEL, 0);
+  delay(1500);
+
+  offsetSensor = lerTensaoSensor();
+
+  Serial.print("ACS712 calibrado. Offset: ");
+  Serial.print(offsetSensor, 4);
+  Serial.println(" V");
+}
+
+float medirCorrente() {
+  float tensaoSensor = lerTensaoSensor();
+  float corrente = abs((tensaoSensor - offsetSensor) / ACS712_SENSIBILIDADE);
+
+  if (corrente < ACS712_RUIDO_MINIMO_A) {
+    return 0;
+  }
+
+  return corrente;
 }
 
 bool conectarWiFi() {
@@ -84,7 +148,7 @@ void receberComandoMqtt(char* topic, byte* payload, unsigned int length) {
 
   if (mensagem.indexOf("auto") >= 0 || mensagem.indexOf("\"automatico\":true") >= 0) {
     modoRemotoAtivo = false;
-    Serial.println("MQTT: voltando para modo automatico por sensor");
+    Serial.println("MQTT: modo automatico por sensor");
     return;
   }
 
@@ -135,7 +199,7 @@ void conectarMqtt() {
   }
 }
 
-void enviarLeitura(float distancia, bool presencaDetectada, int brilho, const String& modo) {
+void enviarLeitura(float distancia, bool presencaDetectada, int brilho, const String& modo, float corrente, float potencia, float consumoEstimado) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Wi-Fi desconectado. Leitura nao enviada agora.");
     return;
@@ -150,14 +214,16 @@ void enviarLeitura(float distancia, bool presencaDetectada, int brilho, const St
   payload += "\"lampada_id\":1,";
   payload += "\"status_lampada\":\"" + statusLampada + "\",";
   payload += "\"intensidade_pwm\":" + String(brilho) + ",";
-  payload += "\"distancia_cm\":" + String(distancia, 2) + ",";
+  payload += "\"distancia_cm\":";
+  payload += distancia < 0 ? "null" : String(distancia, 2);
+  payload += ",";
   payload += "\"modo\":\"" + modo + "\",";
   payload += "\"modo_remoto\":";
   payload += modoRemotoAtivo ? "true" : "false";
   payload += ",";
-  payload += "\"corrente\":null,";
-  payload += "\"potencia\":null,";
-  payload += "\"consumo_estimado\":null,";
+  payload += "\"corrente\":" + String(corrente, 3) + ",";
+  payload += "\"potencia\":" + String(potencia, 2) + ",";
+  payload += "\"consumo_estimado\":" + String(consumoEstimado, 8) + ",";
   payload += "\"presenca_detectada\":";
   payload += presencaDetectada ? "true" : "false";
   payload += ",";
@@ -197,20 +263,20 @@ void setup() {
   Serial.begin(115200);
 
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
+  pinMode(CURRENT_SENSOR_PIN, INPUT);
+
+  analogReadResolution(12);
+  analogSetPinAttenuation(CURRENT_SENSOR_PIN, ADC_11db);
 
   ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(LED_PIN, PWM_CHANNEL);
-
-  ledcWrite(PWM_CHANNEL, 0);
-  delay(300);
-  ledcWrite(PWM_CHANNEL, 255);
-  delay(300);
+  ledcAttachPin(MOSFET_PIN, PWM_CHANNEL);
   ledcWrite(PWM_CHANNEL, 0);
 
-  Serial.println("ReciLuz iniciado...");
+  Serial.println("ReciLuz iniciado com lampada MOSFET + ultrassonico");
+  calibrarSensorCorrente();
+
   conectarWiFi();
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   mqttClient.setCallback(receberComandoMqtt);
@@ -236,52 +302,54 @@ void loop() {
 
   float distancia = medirDistancia();
   bool botaoPressionado = digitalRead(BUTTON_PIN) == LOW;
-  bool presencaDetectada = distancia > 0 && distancia <= 40;
+  bool presencaDetectada = distancia > 0 && distancia <= DISTANCIA_MAX_CM;
 
   int brilho = 0;
   String modo = "";
 
   if (modoRemotoAtivo) {
-    brilho = lampadaRemotaLigada ? 255 : 0;
+    brilho = lampadaRemotaLigada ? BRILHO_MAXIMO : 0;
     modo = lampadaRemotaLigada ? "REMOTO LIGADO" : "REMOTO DESLIGADO";
-  }
-  else if (botaoPressionado) {
-    brilho = 255;
+  } else if (botaoPressionado) {
+    brilho = BRILHO_MAXIMO;
     modo = "MODO MANUAL";
-  } 
-  else if (presencaDetectada) {
-
-    brilho = map(distancia, 40, 5, 10, 255);
-    brilho = constrain(brilho, 10, 255);
-
-    brilho = brilho * brilho / 255;
-
-    modo = "MODO PRESENCA";
-  } 
-  else {
-    brilho = 5; 
-    modo = "MODO NOITE";
+  } else {
+    brilho = calcularBrilhoAutomatico(distancia);
+    modo = brilho > 0 ? "MODO PRESENCA" : "MODO NOITE";
   }
 
   ledcWrite(PWM_CHANNEL, brilho);
 
+  float corrente = medirCorrente();
+  float potencia = corrente * TENSAO_LAMPADA;
+  float consumoEstimado = (potencia / 1000.0) * (INTERVALO_ENVIO_MS / 3600000.0);
+
   Serial.println("-------------------------");
   Serial.print("Distancia: ");
-  Serial.print(distancia);
-  Serial.println(" cm");
+  if (distancia < 0) {
+    Serial.println("sem leitura");
+  } else {
+    Serial.print(distancia, 2);
+    Serial.println(" cm");
+  }
 
-  Serial.print("Botao: ");
-  Serial.println(botaoPressionado ? "pressionado" : "solto");
-
-  Serial.print("Brilho: ");
+  Serial.print("Brilho PWM: ");
   Serial.print(brilho);
   Serial.println(" / 255");
 
   Serial.print("Modo: ");
   Serial.println(modo);
 
+  Serial.print("Corrente: ");
+  Serial.print(corrente, 3);
+  Serial.println(" A");
+
+  Serial.print("Potencia: ");
+  Serial.print(potencia, 2);
+  Serial.println(" W");
+
   if (millis() - ultimoEnvio >= INTERVALO_ENVIO_MS) {
-    enviarLeitura(distancia, presencaDetectada, brilho, modo);
+    enviarLeitura(distancia, presencaDetectada, brilho, modo, corrente, potencia, consumoEstimado);
     ultimoEnvio = millis();
   }
 
