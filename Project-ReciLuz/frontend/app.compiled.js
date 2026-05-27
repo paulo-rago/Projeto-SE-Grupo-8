@@ -204,7 +204,7 @@ function App() {
   const power = Number(latest.potencia || 0);
   const distance = Number(latest.distancia_cm || 0);
   const isOn = pwm > 0;
-  const isAuto = !!latest.modo_remoto;
+  const isAuto = !latest.modo_remoto;
   const highCurrent = current > HIGH_CURRENT_THRESHOLD;
   const onReadings = readings.filter((r) => Number(r.intensidade_pwm || 0) > 0);
   const onHours = onReadings.length / 3600;
