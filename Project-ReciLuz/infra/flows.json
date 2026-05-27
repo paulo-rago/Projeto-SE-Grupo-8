@@ -1,0 +1,190 @@
+[
+    {
+        "id": "7df1ccef190eb612",
+        "type": "http in",
+        "z": "93716f6aaa86542e",
+        "name": "comando lampada",
+        "url": "/comando-lampada",
+        "method": "post",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 550,
+        "y": 600,
+        "wires": [
+            [
+                "e3ed2f5f175a7473"
+            ]
+        ]
+    },
+    {
+        "id": "e3ed2f5f175a7473",
+        "type": "function",
+        "z": "93716f6aaa86542e",
+        "name": "Publicar comando MQTT",
+        "func": "let comando = msg.payload;\n\nif (typeof comando === \"string\") {\n    comando = JSON.parse(comando);\n}\n\nif (Buffer.isBuffer(comando)) {\n    comando = JSON.parse(comando.toString());\n}\n\nconst lampadaId = comando.lampada_id ?? 1;\n\nmsg.topic = `reciluz/lampada/${lampadaId}/comando`;\n\nif (comando.automatico === true) {\n    msg.payload = \"auto\";\n} else if (comando.ligada !== undefined) {\n    msg.payload = JSON.stringify({\n        lampada_id: lampadaId,\n        ligada: comando.ligada\n    });\n} else {\n    msg.statusCode = 400;\n    msg.payload = { erro: \"Payload inválido\" };\n    return msg;\n}\n\nmsg.statusCode = 200;\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 930,
+        "y": 580,
+        "wires": [
+            [
+                "3ead96adad9b7c17",
+                "bad837d475733d74"
+            ]
+        ]
+    },
+    {
+        "id": "bad837d475733d74",
+        "type": "mqtt out",
+        "z": "93716f6aaa86542e",
+        "name": "MQQ lampada",
+        "topic": "",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "9b2d6172aeb76bae",
+        "x": 1180,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "3ead96adad9b7c17",
+        "type": "http response",
+        "z": "93716f6aaa86542e",
+        "name": "Responder FastAPI",
+        "statusCode": "",
+        "headers": {},
+        "x": 1230,
+        "y": 640,
+        "wires": []
+    },
+    {
+        "id": "e6839a287a51a7d1",
+        "type": "http in",
+        "z": "93716f6aaa86542e",
+        "name": "LEITURAS",
+        "url": "/leituras",
+        "method": "post",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 440,
+        "y": 840,
+        "wires": [
+            [
+                "01698db2f6d9ada2"
+            ]
+        ]
+    },
+    {
+        "id": "4303e56386272238",
+        "type": "json",
+        "z": "93716f6aaa86542e",
+        "name": "",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 850,
+        "y": 820,
+        "wires": [
+            [
+                "49b891d52a981eb0"
+            ]
+        ]
+    },
+    {
+        "id": "49b891d52a981eb0",
+        "type": "http request",
+        "z": "93716f6aaa86542e",
+        "name": "",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://127.0.0.1:8000/leituras",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1080,
+        "y": 820,
+        "wires": [
+            [
+                "0553714af8b36931"
+            ]
+        ]
+    },
+    {
+        "id": "0553714af8b36931",
+        "type": "http response",
+        "z": "93716f6aaa86542e",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 1270,
+        "y": 820,
+        "wires": []
+    },
+    {
+        "id": "01698db2f6d9ada2",
+        "type": "function",
+        "z": "93716f6aaa86542e",
+        "name": "Preparar Leitura",
+        "func": "\nlet leitura = msg.payload;\n\nif (typeof leitura === \"string\") {\n    leitura = JSON.parse(leitura);\n}\n\nif (Buffer.isBuffer(leitura)) {\n    leitura = JSON.parse(leitura.toString());\n}\n\nmsg.headers = {\n    \"Content-Type\": \"application/json\"\n};\n\nmsg.payload = leitura;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 760,
+        "y": 920,
+        "wires": [
+            [
+                "4303e56386272238"
+            ]
+        ]
+    },
+    {
+        "id": "9b2d6172aeb76bae",
+        "type": "mqtt-broker",
+        "name": "server",
+        "broker": "127.0.0.1",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]
