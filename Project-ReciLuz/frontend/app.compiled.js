@@ -1,0 +1,359 @@
+const { useState, useEffect, useRef, useCallback } = React;
+const REFRESH_MS = 2e3;
+const CHART_WINDOW = 30;
+const VOLTAGE = 12;
+const HIGH_CURRENT_THRESHOLD = 1;
+function fmt(v, fallback = "--") {
+  return v === null || v === void 0 || v === "" ? fallback : v;
+}
+function fmtNum(v, decimals = 1) {
+  const n = Number(v);
+  return v === null || v === void 0 || isNaN(n) ? "--" : n.toFixed(decimals);
+}
+function fmtEnergy(kwh) {
+  if (kwh === null || kwh === void 0 || isNaN(Number(kwh))) return "--";
+  const v = Number(kwh);
+  if (v >= 0.01) return `${v.toFixed(4)} kWh`;
+  const wh = v * 1e3;
+  if (wh >= 0.01) return `${wh.toFixed(3)} Wh`;
+  return `${(wh * 1e3).toFixed(2)} mWh`;
+}
+function fmtDuration(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor(seconds % 3600 / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+function fmtTime(iso) {
+  if (!iso) return "--";
+  return new Date(iso).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { Accept: "application/json", ...options.headers },
+    ...options
+  });
+  if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+  return res.json();
+}
+function StatusBadge({ ok, label }) {
+  return /* @__PURE__ */ React.createElement("div", { className: `status-badge ${ok ? "badge-online" : "badge-offline"}` }, /* @__PURE__ */ React.createElement("span", { className: "badge-dot" }), /* @__PURE__ */ React.createElement("span", null, label));
+}
+function IntensityGauge({ percent }) {
+  const pct = Math.max(0, Math.min(100, percent || 0));
+  const arcLen = Math.PI * 54;
+  const filled = pct / 100 * arcLen;
+  const color = pct > 70 ? "#16A34A" : pct > 30 ? "#CA8A04" : "#2563EB";
+  return /* @__PURE__ */ React.createElement("div", { className: "gauge-wrap" }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 130 76", className: "gauge-svg", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement(
+    "path",
+    {
+      d: "M 11 65 A 54 54 0 0 1 119 65",
+      fill: "none",
+      stroke: "rgba(0,0,0,0.08)",
+      strokeWidth: "11",
+      strokeLinecap: "round"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    "path",
+    {
+      d: "M 11 65 A 54 54 0 0 1 119 65",
+      fill: "none",
+      stroke: color,
+      strokeWidth: "11",
+      strokeLinecap: "round",
+      strokeDasharray: `${filled} ${arcLen}`,
+      style: { transition: "stroke-dasharray 0.4s ease, stroke 0.3s ease" }
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "gauge-center" }, /* @__PURE__ */ React.createElement("span", { className: "gauge-number", style: { color } }, pct), /* @__PURE__ */ React.createElement("span", { className: "gauge-pct" }, "%")), /* @__PURE__ */ React.createElement("div", { className: "gauge-caption" }, "INTENSIDADE"));
+}
+function MetricCard({ icon, value, unit, label, sub, alert }) {
+  return /* @__PURE__ */ React.createElement("article", { className: `metric-card${alert ? " metric-alert" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "mc-icon" }, icon), /* @__PURE__ */ React.createElement("div", { className: "mc-body" }, /* @__PURE__ */ React.createElement("div", { className: "mc-value" }, /* @__PURE__ */ React.createElement("span", { className: "mc-number" }, value), unit && /* @__PURE__ */ React.createElement("span", { className: "mc-unit" }, unit)), /* @__PURE__ */ React.createElement("div", { className: "mc-label" }, label), sub && /* @__PURE__ */ React.createElement("div", { className: "mc-sub" }, sub)));
+}
+function RealtimeChart({ readings }) {
+  const canvasRef = useRef(null);
+  const chartRef = useRef(null);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    chartRef.current = new Chart(canvasRef.current, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Intensidade (%)",
+            data: [],
+            borderColor: "#16A34A",
+            backgroundColor: "rgba(22,163,74,0.08)",
+            tension: 0.4,
+            fill: true,
+            pointRadius: 2,
+            yAxisID: "y"
+          },
+          {
+            label: "Corrente \xD710 (A)",
+            data: [],
+            borderColor: "#2563EB",
+            backgroundColor: "transparent",
+            tension: 0.4,
+            fill: false,
+            pointRadius: 2,
+            yAxisID: "y"
+          },
+          {
+            label: "Dist\xE2ncia (cm)",
+            data: [],
+            borderColor: "#CA8A04",
+            backgroundColor: "transparent",
+            tension: 0.4,
+            fill: false,
+            pointRadius: 2,
+            borderDash: [4, 3],
+            yAxisID: "y2"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: {
+            position: "top",
+            labels: { boxWidth: 10, font: { size: 11 }, padding: 14, usePointStyle: true }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: "rgba(0,0,0,0.04)" },
+            ticks: { font: { size: 10 }, maxTicksLimit: 7, color: "#9CA3AF" }
+          },
+          y: {
+            position: "left",
+            min: 0,
+            max: 100,
+            grid: { color: "rgba(0,0,0,0.04)" },
+            ticks: { font: { size: 10 }, color: "#9CA3AF", stepSize: 25 }
+          },
+          y2: {
+            position: "right",
+            min: 0,
+            max: 100,
+            grid: { drawOnChartArea: false },
+            ticks: { font: { size: 10 }, color: "#CA8A04", stepSize: 25 }
+          }
+        }
+      }
+    });
+    return () => {
+      if (chartRef.current) chartRef.current.destroy();
+    };
+  }, []);
+  useEffect(() => {
+    if (!chartRef.current || !readings.length) return;
+    const data = readings.slice().reverse().slice(-CHART_WINDOW);
+    const c = chartRef.current;
+    c.data.labels = data.map((r) => fmtTime(r.criada_em));
+    c.data.datasets[0].data = data.map((r) => Math.round(Number(r.intensidade_pwm || 0) / 255 * 100));
+    c.data.datasets[1].data = data.map((r) => +(Number(r.corrente || 0) * 10).toFixed(2));
+    c.data.datasets[2].data = data.map((r) => +Number(r.distancia_cm || 0).toFixed(1));
+    c.update("none");
+  }, [readings]);
+  return /* @__PURE__ */ React.createElement("div", { className: "chart-container" }, /* @__PURE__ */ React.createElement("canvas", { ref: canvasRef }));
+}
+function EventLog({ readings, cmdLogs }) {
+  return /* @__PURE__ */ React.createElement("div", { className: "log-scroll" }, readings.length === 0 && cmdLogs.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "log-empty" }, "Aguardando eventos...") : /* @__PURE__ */ React.createElement(React.Fragment, null, cmdLogs.map((l, i) => /* @__PURE__ */ React.createElement("div", { key: `cmd-${i}`, className: "log-row log-cmd" }, /* @__PURE__ */ React.createElement("span", { className: "log-msg" }, l))), readings.slice(0, 12).map((r) => /* @__PURE__ */ React.createElement("div", { key: r.id, className: `log-row${r.presenca_detectada ? " log-presence" : ""}` }, /* @__PURE__ */ React.createElement("span", { className: "log-time" }, fmtTime(r.criada_em)), /* @__PURE__ */ React.createElement("span", { className: "log-mode" }, r.modo || r.status_lampada || "--"), /* @__PURE__ */ React.createElement("span", { className: "log-detail" }, fmtNum(r.distancia_cm, 0), " cm \xB7 PWM ", fmt(r.intensidade_pwm), " \xB7 ", fmtNum(r.corrente, 3), " A"), r.presenca_detectada && /* @__PURE__ */ React.createElement("span", { className: "log-tag" }, "Presen\xE7a")))));
+}
+function SavingsRing({ pct }) {
+  const circ = 2 * Math.PI * 46;
+  const filled = Math.max(0, Math.min(100, pct || 0)) / 100 * circ;
+  const color = pct >= 50 ? "#16A34A" : pct >= 20 ? "#CA8A04" : "#DC2626";
+  return /* @__PURE__ */ React.createElement("div", { className: "ring-wrap" }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 108 108", className: "ring-svg", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("circle", { cx: "54", cy: "54", r: "46", fill: "none", stroke: "rgba(0,0,0,0.07)", strokeWidth: "10" }), /* @__PURE__ */ React.createElement(
+    "circle",
+    {
+      cx: "54",
+      cy: "54",
+      r: "46",
+      fill: "none",
+      stroke: color,
+      strokeWidth: "10",
+      strokeLinecap: "round",
+      strokeDasharray: `${filled} ${circ}`,
+      transform: "rotate(-90 54 54)",
+      style: { transition: "stroke-dasharray 0.6s ease, stroke 0.3s ease" }
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "ring-center" }, /* @__PURE__ */ React.createElement("span", { className: "ring-number", style: { color } }, pct !== null ? Math.round(pct) : "--"), /* @__PURE__ */ React.createElement("span", { className: "ring-unit" }, "%")));
+}
+function App() {
+  const [lamp, setLamp] = useState(null);
+  const [readings, setReadings] = useState([]);
+  const [esp32Online, setEsp32Online] = useState(false);
+  const [mqttFresh, setMqttFresh] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [cmdLogs, setCmdLogs] = useState([]);
+  const latest = readings[0] || {};
+  const pwm = Number(latest.intensidade_pwm || 0);
+  const pwmPct = Math.round(pwm / 255 * 100);
+  const current = Number(latest.corrente || 0);
+  const power = Number(latest.potencia || 0);
+  const distance = Number(latest.distancia_cm || 0);
+  const isOn = pwm > 0;
+  const isAuto = !!latest.modo_remoto;
+  const highCurrent = current > HIGH_CURRENT_THRESHOLD;
+  const onReadings = readings.filter((r) => Number(r.intensidade_pwm || 0) > 0);
+  const onHours = onReadings.length / 3600;
+  const totalKwh = readings.reduce((s, r) => s + Number(r.consumo_estimado || 0), 0);
+  const refKwh = 60 / 1e3 * onHours;
+  const savingsKwh = Math.max(0, refKwh - totalKwh);
+  const savingsPct = refKwh > 0 ? Math.min(100, Math.max(0, savingsKwh / refKwh * 100)) : null;
+  const avgPower = readings.length ? readings.reduce((s, r) => s + Number(r.potencia || 0), 0) / readings.length : null;
+  const peakPower = readings.length ? Math.max(...readings.map((r) => Number(r.potencia || 0))) : null;
+  const avgPwmPct = onReadings.length ? Math.round(onReadings.reduce((s, r) => s + Number(r.intensidade_pwm || 0), 0) / onReadings.length / 255 * 100) : null;
+  const presenceCount = readings.filter((r) => r.presenca_detectada).length;
+  const log = useCallback((msg) => {
+    const t = (/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setCmdLogs((prev) => [`[${t}] ${msg}`, ...prev].slice(0, 20));
+  }, []);
+  const refresh = useCallback(async () => {
+    try {
+      const [lampData, readingsData] = await Promise.all([
+        api("/lampada/status"),
+        api("/leituras?limite=40")
+      ]);
+      setLamp(lampData);
+      setReadings(readingsData);
+      setEsp32Online(true);
+      const r0 = readingsData[0];
+      if (r0?.criada_em) {
+        const age = (Date.now() - new Date(r0.criada_em).getTime()) / 1e3;
+        setMqttFresh(age < 15);
+      } else {
+        setMqttFresh(false);
+      }
+    } catch {
+      setEsp32Online(false);
+      setMqttFresh(false);
+    }
+  }, []);
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [refresh]);
+  const sendCmd = useCallback(async (path, msg) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api(path, { method: "POST" });
+      log(msg);
+      await refresh();
+    } catch (e) {
+      log(`Erro: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, refresh, log]);
+  const toggleLamp = () => sendCmd(
+    isOn ? "/lampada/desligar" : "/lampada/ligar",
+    isOn ? "L\xE2mpada desligada (manual)" : "L\xE2mpada ligada (manual)"
+  );
+  const toggleAuto = () => sendCmd(
+    isAuto ? "/lampada/desligar" : "/lampada/automatico",
+    isAuto ? "Modo autom\xE1tico desativado" : "Modo autom\xE1tico ativado"
+  );
+  return /* @__PURE__ */ React.createElement("div", { className: "app" }, /* @__PURE__ */ React.createElement("header", { className: "header" }, /* @__PURE__ */ React.createElement("div", { className: "header-brand" }, /* @__PURE__ */ React.createElement("div", { className: "brand-bulb", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("svg", { width: "32", height: "32", viewBox: "0 0 32 32", fill: "none" }, /* @__PURE__ */ React.createElement("circle", { cx: "16", cy: "14", r: "8", fill: "#FDE68A", stroke: "#CA8A04", strokeWidth: "1.5" }), /* @__PURE__ */ React.createElement("path", { d: "M13 22h6M13.5 25h5M14 28h4", stroke: "#CA8A04", strokeWidth: "1.5", strokeLinecap: "round" }), /* @__PURE__ */ React.createElement("path", { d: "M16 6V4M8 8L6.5 6.5M24 8l1.5-1.5M6 14H4M28 14h-2", stroke: "#CA8A04", strokeWidth: "1.5", strokeLinecap: "round" }))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "brand-name" }, "ReciLuz"), /* @__PURE__ */ React.createElement("p", { className: "brand-tagline" }, "Ilumina\xE7\xE3o Inteligente \xB7 ESP32 + MQTT"))), /* @__PURE__ */ React.createElement("div", { className: "header-right" }, /* @__PURE__ */ React.createElement(StatusBadge, { ok: esp32Online, label: "ESP32" }), /* @__PURE__ */ React.createElement(StatusBadge, { ok: mqttFresh, label: "MQTT" }), /* @__PURE__ */ React.createElement("div", { className: "header-time" }, fmtTime(latest.criada_em)))), /* @__PURE__ */ React.createElement("div", { className: "shell" }, highCurrent && /* @__PURE__ */ React.createElement("div", { className: "alert-bar", role: "alert" }, /* @__PURE__ */ React.createElement("span", { className: "alert-icon" }, "\u26A0"), /* @__PURE__ */ React.createElement("span", null, "Corrente elevada detectada: ", /* @__PURE__ */ React.createElement("strong", null, fmtNum(current, 3), " A"), " \u2014 verifique o circuito!")), /* @__PURE__ */ React.createElement("section", { className: "controls-grid" }, /* @__PURE__ */ React.createElement("div", { className: "card mode-card" }, /* @__PURE__ */ React.createElement("div", { className: "mode-label" }, "MODO ATUAL"), /* @__PURE__ */ React.createElement("div", { className: `mode-pill ${isAuto ? "mode-auto" : "mode-manual"}` }, isAuto ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: "mode-icon" }, "\u25C9"), " Autom\xE1tico") : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: "mode-icon" }, "\u25CE"), " Manual")), /* @__PURE__ */ React.createElement("p", { className: "mode-desc" }, isAuto ? "Brilho controlado pela dist\xE2ncia do sensor" : isOn ? "L\xE2mpada ligada por comando manual" : "L\xE2mpada apagada"), /* @__PURE__ */ React.createElement("div", { className: `lamp-dot ${isOn ? "lamp-on" : "lamp-off"}`, title: isOn ? "Ligada" : "Desligada" })), /* @__PURE__ */ React.createElement("div", { className: `card ctrl-card${isAuto ? " ctrl-disabled" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "ctrl-label" }, "CONTROLE MANUAL"), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: `btn-power ${isOn && !isAuto ? "btn-power-on" : "btn-power-off"}`,
+      onClick: toggleLamp,
+      disabled: busy || isAuto,
+      "aria-pressed": isOn && !isAuto
+    },
+    /* @__PURE__ */ React.createElement("svg", { width: "22", height: "22", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.2", strokeLinecap: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M12 2v6M18.36 5.64A9 9 0 1 1 5.64 5.64" })),
+    isOn && !isAuto ? "LIGADA" : "DESLIGADA"
+  ), isAuto && /* @__PURE__ */ React.createElement("p", { className: "ctrl-hint" }, "Desative o modo autom\xE1tico primeiro")), /* @__PURE__ */ React.createElement("div", { className: "card ctrl-card" }, /* @__PURE__ */ React.createElement("div", { className: "ctrl-label" }, "MODO AUTOM\xC1TICO"), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: `btn-auto ${isAuto ? "btn-auto-on" : "btn-auto-off"}`,
+      onClick: toggleAuto,
+      disabled: busy,
+      "aria-pressed": isAuto
+    },
+    /* @__PURE__ */ React.createElement("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.2", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "3" }), /* @__PURE__ */ React.createElement("path", { d: "M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" })),
+    isAuto ? "ATIVO" : "INATIVO"
+  ), /* @__PURE__ */ React.createElement("p", { className: "ctrl-hint" }, isAuto ? "Quanto mais pr\xF3ximo, maior o brilho" : "Toque para ativar o sensor"))), /* @__PURE__ */ React.createElement("section", { className: "gauge-section" }, /* @__PURE__ */ React.createElement("div", { className: "card gauge-card" }, /* @__PURE__ */ React.createElement(IntensityGauge, { percent: pwmPct }), /* @__PURE__ */ React.createElement("div", { className: "gauge-meta" }, /* @__PURE__ */ React.createElement("div", { className: "gm-item" }, /* @__PURE__ */ React.createElement("span", { className: "gm-label" }, "PWM"), /* @__PURE__ */ React.createElement("span", { className: "gm-value" }, fmt(latest.intensidade_pwm, "--"), "/255")), /* @__PURE__ */ React.createElement("div", { className: "gm-divider" }), /* @__PURE__ */ React.createElement("div", { className: "gm-item" }, /* @__PURE__ */ React.createElement("span", { className: "gm-label" }, "Status"), /* @__PURE__ */ React.createElement("span", { className: `gm-value ${isOn ? "gm-on" : "gm-off"}` }, isOn ? "Ligada" : "Desligada")))), /* @__PURE__ */ React.createElement("div", { className: "metrics-grid" }, /* @__PURE__ */ React.createElement(
+    MetricCard,
+    {
+      icon: /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "#2563EB", strokeWidth: "2", strokeLinecap: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" })),
+      value: fmtNum(distance, 0),
+      unit: "cm",
+      label: "Dist\xE2ncia",
+      sub: latest.presenca_detectada ? "\u25CF Presen\xE7a detectada" : "\u25CB Sem presen\xE7a"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    MetricCard,
+    {
+      icon: /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: highCurrent ? "#DC2626" : "#CA8A04", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M13 2L3 14h9l-1 8 10-12h-9l1-8z" })),
+      value: fmtNum(current, 3),
+      unit: "A",
+      label: "Corrente",
+      sub: "Sensor ACS712",
+      alert: highCurrent
+    }
+  ), /* @__PURE__ */ React.createElement(
+    MetricCard,
+    {
+      icon: /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "#16A34A", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("rect", { x: "2", y: "7", width: "20", height: "14", rx: "2" }), /* @__PURE__ */ React.createElement("path", { d: "M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" }), /* @__PURE__ */ React.createElement("line", { x1: "12", y1: "12", x2: "12", y2: "16" }), /* @__PURE__ */ React.createElement("line", { x1: "10", y1: "14", x2: "14", y2: "14" })),
+      value: fmtNum(power, 2),
+      unit: "W",
+      label: "Pot\xEAncia",
+      sub: `${VOLTAGE}V \xD7 ${fmtNum(current, 3)}A`
+    }
+  ), /* @__PURE__ */ React.createElement(
+    MetricCard,
+    {
+      icon: /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "#7C3AED", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M23 6l-9.5 9.5-5-5L1 18" }), /* @__PURE__ */ React.createElement("polyline", { points: "17 6 23 6 23 12" })),
+      value: VOLTAGE,
+      unit: "V",
+      label: "Tens\xE3o",
+      sub: "LED 12 V DC"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    MetricCard,
+    {
+      icon: /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "#0891B2", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("polyline", { points: "22 12 18 12 15 21 9 3 6 12 2 12" })),
+      value: fmtEnergy(totalKwh),
+      unit: "",
+      label: "Consumo Acum.",
+      sub: "Energia total acumulada"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    MetricCard,
+    {
+      icon: /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "#16A34A", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" }), /* @__PURE__ */ React.createElement("path", { d: "M7 13s.5 3 5 3 5-3 5-3" }), /* @__PURE__ */ React.createElement("line", { x1: "9", y1: "9", x2: "9.01", y2: "9" }), /* @__PURE__ */ React.createElement("line", { x1: "15", y1: "9", x2: "15.01", y2: "9" })),
+      value: savingsPct !== null ? `${Math.round(savingsPct)}%` : "--",
+      unit: "",
+      label: "Economia",
+      sub: "vs l\xE2mpada 60 W"
+    }
+  ))), /* @__PURE__ */ React.createElement("section", { className: "chart-log-section" }, /* @__PURE__ */ React.createElement("div", { className: "card chart-card" }, /* @__PURE__ */ React.createElement("div", { className: "card-head" }, /* @__PURE__ */ React.createElement("h2", { className: "card-title" }, "Monitoramento em Tempo Real"), /* @__PURE__ */ React.createElement("span", { className: "card-badge" }, readings.length, " amostras")), /* @__PURE__ */ React.createElement(RealtimeChart, { readings })), /* @__PURE__ */ React.createElement("div", { className: "card log-card" }, /* @__PURE__ */ React.createElement("div", { className: "card-head" }, /* @__PURE__ */ React.createElement("h2", { className: "card-title" }, "Log de Eventos")), /* @__PURE__ */ React.createElement(EventLog, { readings, cmdLogs }))), /* @__PURE__ */ React.createElement("section", { className: "analytics-section" }, /* @__PURE__ */ React.createElement("div", { className: "card analytics-card" }, /* @__PURE__ */ React.createElement("div", { className: "card-head" }, /* @__PURE__ */ React.createElement("h2", { className: "card-title" }, "Economia Estimada"), /* @__PURE__ */ React.createElement("span", { className: "card-badge" }, "ref. 60 W cont\xEDnua")), /* @__PURE__ */ React.createElement("div", { className: "analytics-body" }, /* @__PURE__ */ React.createElement(SavingsRing, { pct: savingsPct }), /* @__PURE__ */ React.createElement("div", { className: "analytics-stats" }, /* @__PURE__ */ React.createElement("div", { className: "astat-row" }, /* @__PURE__ */ React.createElement("span", { className: "astat-label" }, "Consumo real"), /* @__PURE__ */ React.createElement("span", { className: "astat-value" }, fmtEnergy(totalKwh))), /* @__PURE__ */ React.createElement("div", { className: "astat-row" }, /* @__PURE__ */ React.createElement("span", { className: "astat-label" }, "Refer\xEAncia (60 W)"), /* @__PURE__ */ React.createElement("span", { className: "astat-value" }, fmtEnergy(refKwh))), /* @__PURE__ */ React.createElement("div", { className: "astat-row astat-highlight" }, /* @__PURE__ */ React.createElement("span", { className: "astat-label" }, "Energia economizada"), /* @__PURE__ */ React.createElement("span", { className: "astat-value" }, fmtEnergy(savingsKwh))), /* @__PURE__ */ React.createElement("div", { className: "compare-bars" }, /* @__PURE__ */ React.createElement("div", { className: "compare-row" }, /* @__PURE__ */ React.createElement("span", { className: "compare-label" }, "Refer\xEAncia"), /* @__PURE__ */ React.createElement("div", { className: "compare-track" }, /* @__PURE__ */ React.createElement("div", { className: "compare-fill compare-ref", style: { width: "100%" } }))), /* @__PURE__ */ React.createElement("div", { className: "compare-row" }, /* @__PURE__ */ React.createElement("span", { className: "compare-label" }, "Real"), /* @__PURE__ */ React.createElement("div", { className: "compare-track" }, /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "compare-fill compare-real",
+      style: { width: `${refKwh > 0 ? Math.min(100, totalKwh / refKwh * 100) : 0}%` }
+    }
+  ))))))), /* @__PURE__ */ React.createElement("div", { className: "card analytics-card" }, /* @__PURE__ */ React.createElement("div", { className: "card-head" }, /* @__PURE__ */ React.createElement("h2", { className: "card-title" }, "Consumo & Efici\xEAncia")), /* @__PURE__ */ React.createElement("div", { className: "stats-list" }, /* @__PURE__ */ React.createElement("div", { className: "sl-row" }, /* @__PURE__ */ React.createElement("span", { className: "sl-label" }, "Pot\xEAncia m\xE9dia"), /* @__PURE__ */ React.createElement("span", { className: "sl-value" }, fmtNum(avgPower, 2), " W")), /* @__PURE__ */ React.createElement("div", { className: "sl-row" }, /* @__PURE__ */ React.createElement("span", { className: "sl-label" }, "Pico de pot\xEAncia"), /* @__PURE__ */ React.createElement("span", { className: "sl-value" }, fmtNum(peakPower, 2), " W")), /* @__PURE__ */ React.createElement("div", { className: "sl-row" }, /* @__PURE__ */ React.createElement("span", { className: "sl-label" }, "Acumulado total"), /* @__PURE__ */ React.createElement("span", { className: "sl-value" }, fmtEnergy(totalKwh))), /* @__PURE__ */ React.createElement("div", { className: "sl-row" }, /* @__PURE__ */ React.createElement("span", { className: "sl-label" }, "Tempo ligada"), /* @__PURE__ */ React.createElement("span", { className: "sl-value" }, fmtDuration(onReadings.length))), /* @__PURE__ */ React.createElement("div", { className: "sl-row" }, /* @__PURE__ */ React.createElement("span", { className: "sl-label" }, "Intensidade m\xE9dia"), /* @__PURE__ */ React.createElement("span", { className: "sl-value" }, avgPwmPct !== null ? `${avgPwmPct}%` : "--")), /* @__PURE__ */ React.createElement("div", { className: "sl-row" }, /* @__PURE__ */ React.createElement("span", { className: "sl-label" }, "Leituras com presen\xE7a"), /* @__PURE__ */ React.createElement("span", { className: "sl-value" }, presenceCount, " / ", readings.length))), /* @__PURE__ */ React.createElement("div", { className: "presence-section" }, /* @__PURE__ */ React.createElement("div", { className: "presence-top" }, /* @__PURE__ */ React.createElement("span", { className: "presence-label" }, "Detec\xE7\xF5es de presen\xE7a"), /* @__PURE__ */ React.createElement("span", { className: "presence-pct" }, readings.length > 0 ? Math.round(presenceCount / readings.length * 100) : 0, "%")), /* @__PURE__ */ React.createElement("div", { className: "presence-track" }, /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "presence-fill",
+      style: { width: `${readings.length > 0 ? presenceCount / readings.length * 100 : 0}%` }
+    }
+  )))))), /* @__PURE__ */ React.createElement("footer", { className: "footer" }, /* @__PURE__ */ React.createElement("span", null, "ReciLuz Dashboard \xB7 Atualiza\xE7\xE3o a cada ", REFRESH_MS / 1e3, "s"), /* @__PURE__ */ React.createElement("span", null, "\xDAltima leitura: ", fmtTime(latest.criada_em))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(App, null));
