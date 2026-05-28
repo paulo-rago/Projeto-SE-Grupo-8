@@ -54,6 +54,8 @@ class Leitura(Base):
     potencia = Column(Float, nullable=True)
     consumo_estimado = Column(Float, nullable=True)
     presenca_detectada = Column(Boolean, nullable=True)
+    som_detectado = Column(Boolean, nullable=True)
+    nivel_ruido_db = Column(Float, nullable=True)
     temperatura = Column(Float, nullable=True)
     umidade = Column(Float, nullable=True)
     qualidade_ar = Column(Float, nullable=True)

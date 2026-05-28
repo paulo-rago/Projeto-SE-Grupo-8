@@ -648,8 +648,9 @@ function EventLog({ readings, cmdLogs }) {
         <div key={r.id} className={`log-row ${r.presenca_detectada ? 'presence' : ''}`}>
           <span className="log-time">{fmtTime(r.criada_em)}</span>
           <span className="log-mode">{r.modo || r.status_lampada || '--'}</span>
-          <span className="log-detail">{fmtNum(r.distancia_cm, 0)} cm · PWM {fmt(r.intensidade_pwm)} · {fmtNum(r.corrente, 3)} A</span>
+          <span className="log-detail">{fmtNum(r.distancia_cm, 0)} cm · PWM {fmt(r.intensidade_pwm)} · {fmtNum(r.corrente, 3)} A · {fmtNum(r.nivel_ruido_db, 1)} dB</span>
           {r.presenca_detectada && <span className="log-tag">Presença</span>}
+          {r.som_detectado && <span className="log-tag">Ruído</span>}
         </div>
       ))}
     </div>
@@ -707,6 +708,7 @@ function Dashboard() {
   const peakPower = readings.length ? Math.max(...readings.map(r => Number(r.potencia || 0))) : null;
   const avgPwmPct = onReadings.length ? Math.round(onReadings.reduce((s, r) => s + Number(r.intensidade_pwm || 0), 0) / onReadings.length / 255 * 100) : null;
   const presenceCount = readings.filter(r => r.presenca_detectada).length;
+  const soundCount = readings.filter(r => r.som_detectado).length;
 
   const log = useCallback((msg) => {
     const t = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -882,10 +884,10 @@ function Dashboard() {
               />
               <Metric
                 iconColor="#6E5BBE" iconBg="rgba(110,91,190,0.10)"
-                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18" /><polyline points="17 6 23 6 23 12" /></svg>}
-                value={VOLTAGE} unit="V"
-                label="Tensão"
-                sub="LED 12 V DC"
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 10v4" /><path d="M6 7v10" /><path d="M10 4v16" /><path d="M14 8v8" /><path d="M18 6v12" /><path d="M22 10v4" /></svg>}
+                value={fmtNum(latest.nivel_ruido_db, 1)} unit="dB"
+                label="Ruído"
+                sub={latest.som_detectado ? 'Acima do limite' : 'Ambiente estável'}
               />
               <Metric
                 iconColor="#0E8A4F" iconBg="rgba(14,138,79,0.10)"
@@ -972,6 +974,7 @@ function Dashboard() {
                 <div className="sl-row"><span className="sl-lab">Tempo ligada</span><span className="sl-val">{fmtDuration(Math.round(onSeconds))}</span></div>
                 <div className="sl-row"><span className="sl-lab">Intensidade média</span><span className="sl-val">{avgPwmPct !== null ? `${avgPwmPct}%` : '--'}</span></div>
                 <div className="sl-row"><span className="sl-lab">Leituras com presença</span><span className="sl-val">{presenceCount} / {readings.length}</span></div>
+                <div className="sl-row"><span className="sl-lab">Leituras com ruído</span><span className="sl-val">{soundCount} / {readings.length}</span></div>
               </div>
               <div className="presence-sec">
                 <div className="presence-top">

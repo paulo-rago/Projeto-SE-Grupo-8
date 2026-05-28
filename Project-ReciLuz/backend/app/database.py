@@ -36,6 +36,8 @@ def _migrar_sqlite():
         "distancia_cm": "FLOAT",
         "modo": "VARCHAR",
         "modo_remoto": "BOOLEAN",
+        "som_detectado": "BOOLEAN",
+        "nivel_ruido_db": "FLOAT",
     }
 
     with engine.begin() as connection:

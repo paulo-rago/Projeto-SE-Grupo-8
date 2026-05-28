@@ -48,6 +48,8 @@ class LeituraBase(BaseModel):
     potencia: Optional[float] = None
     consumo_estimado: Optional[float] = None
     presenca_detectada: Optional[bool] = None
+    som_detectado: Optional[bool] = None
+    nivel_ruido_db: Optional[float] = None
     temperatura: Optional[float] = None
     umidade: Optional[float] = None
     qualidade_ar: Optional[float] = None

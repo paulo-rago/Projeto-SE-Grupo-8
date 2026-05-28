@@ -58,6 +58,8 @@ class LeituraService:
             potencia=potencia,
             consumo_estimado=consumo_estimado,
             presenca_detectada=leitura_data.presenca_detectada,
+            som_detectado=leitura_data.som_detectado,
+            nivel_ruido_db=leitura_data.nivel_ruido_db,
             temperatura=leitura_data.temperatura,
             umidade=leitura_data.umidade,
             qualidade_ar=leitura_data.qualidade_ar

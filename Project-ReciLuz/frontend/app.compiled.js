@@ -418,7 +418,7 @@ function RealtimeChart({ readings }) {
 }
 function EventLog({ readings, cmdLogs }) {
   if (!readings.length && !cmdLogs.length) return /* @__PURE__ */ React.createElement("div", { className: "log-empty" }, "Aguardando eventos...");
-  return /* @__PURE__ */ React.createElement("div", { className: "log-list" }, cmdLogs.map((l, i) => /* @__PURE__ */ React.createElement("div", { key: `c-${i}`, className: "log-row cmd" }, /* @__PURE__ */ React.createElement("span", { className: "log-msg" }, l))), readings.slice(0, 12).map((r) => /* @__PURE__ */ React.createElement("div", { key: r.id, className: `log-row ${r.presenca_detectada ? "presence" : ""}` }, /* @__PURE__ */ React.createElement("span", { className: "log-time" }, fmtTime(r.criada_em)), /* @__PURE__ */ React.createElement("span", { className: "log-mode" }, r.modo || r.status_lampada || "--"), /* @__PURE__ */ React.createElement("span", { className: "log-detail" }, fmtNum(r.distancia_cm, 0), " cm \xB7 PWM ", fmt(r.intensidade_pwm), " \xB7 ", fmtNum(r.corrente, 3), " A"), r.presenca_detectada && /* @__PURE__ */ React.createElement("span", { className: "log-tag" }, "Presen\xE7a"))));
+  return /* @__PURE__ */ React.createElement("div", { className: "log-list" }, cmdLogs.map((l, i) => /* @__PURE__ */ React.createElement("div", { key: `c-${i}`, className: "log-row cmd" }, /* @__PURE__ */ React.createElement("span", { className: "log-msg" }, l))), readings.slice(0, 12).map((r) => /* @__PURE__ */ React.createElement("div", { key: r.id, className: `log-row ${r.presenca_detectada ? "presence" : ""}` }, /* @__PURE__ */ React.createElement("span", { className: "log-time" }, fmtTime(r.criada_em)), /* @__PURE__ */ React.createElement("span", { className: "log-mode" }, r.modo || r.status_lampada || "--"), /* @__PURE__ */ React.createElement("span", { className: "log-detail" }, fmtNum(r.distancia_cm, 0), " cm \xB7 PWM ", fmt(r.intensidade_pwm), " \xB7 ", fmtNum(r.corrente, 3), " A \xB7 ", fmtNum(r.nivel_ruido_db, 1), " dB"), r.presenca_detectada && /* @__PURE__ */ React.createElement("span", { className: "log-tag" }, "Presen\xE7a"), r.som_detectado && /* @__PURE__ */ React.createElement("span", { className: "log-tag" }, "Ru\xEDdo"))));
 }
 function SavingsRing({ pct }) {
   const circ = 2 * Math.PI * 52;
@@ -467,6 +467,7 @@ function Dashboard() {
   const peakPower = readings.length ? Math.max(...readings.map((r) => Number(r.potencia || 0))) : null;
   const avgPwmPct = onReadings.length ? Math.round(onReadings.reduce((s, r) => s + Number(r.intensidade_pwm || 0), 0) / onReadings.length / 255 * 100) : null;
   const presenceCount = readings.filter((r) => r.presenca_detectada).length;
+  const soundCount = readings.filter((r) => r.som_detectado).length;
   const log = useCallback((msg) => {
     const t = (/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     setCmdLogs((prev) => [`[${t}] ${msg}`, ...prev].slice(0, 20));
@@ -575,11 +576,11 @@ function Dashboard() {
     {
       iconColor: "#6E5BBE",
       iconBg: "rgba(110,91,190,0.10)",
-      icon: /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M23 6l-9.5 9.5-5-5L1 18" }), /* @__PURE__ */ React.createElement("polyline", { points: "17 6 23 6 23 12" })),
-      value: VOLTAGE,
-      unit: "V",
-      label: "Tens\xE3o",
-      sub: "LED 12 V DC"
+      icon: /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M2 10v4" }), /* @__PURE__ */ React.createElement("path", { d: "M6 7v10" }), /* @__PURE__ */ React.createElement("path", { d: "M10 4v16" }), /* @__PURE__ */ React.createElement("path", { d: "M14 8v8" }), /* @__PURE__ */ React.createElement("path", { d: "M18 6v12" }), /* @__PURE__ */ React.createElement("path", { d: "M22 10v4" })),
+      value: fmtNum(latest.nivel_ruido_db, 1),
+      unit: "dB",
+      label: "Ru\xEDdo",
+      sub: latest.som_detectado ? "Acima do limite" : "Ambiente est\xE1vel"
     }
   ), /* @__PURE__ */ React.createElement(
     Metric,
