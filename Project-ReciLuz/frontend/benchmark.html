@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReciLuz — Análise de Algoritmos</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --teal:   #1B8A8F;
+      --teal-lt: #25b5bc;
+      --amber:  #F5A623;
+      --red:    #e05555;
+      --green:  #2ecc71;
+      --ink:    #1A2540;
+      --night:  #0E1A36;
+      --panel:  #142035;
+      --border: rgba(255,255,255,0.08);
+      --txt:    #e2e8f0;
+      --sub:    #94a3b8;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--night);
+      color: var(--txt);
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--ink) 0%, #0a1428 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 1.2rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header .logo { font-size: 1.4rem; font-weight: 700; color: var(--teal-lt); letter-spacing: -0.5px; }
+    header .subtitle { font-size: 0.85rem; color: var(--sub); }
+    header .badge {
+      margin-left: auto;
+      padding: 0.3rem 0.8rem;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(231,76,60,0.15);
+      color: var(--red);
+      border: 1px solid rgba(231,76,60,0.3);
+    }
+    header .badge.connected {
+      background: rgba(46,204,113,0.15);
+      color: var(--green);
+      border-color: rgba(46,204,113,0.3);
+    }
+
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+    .intro {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--teal);
+      border-radius: 0.5rem;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+      color: var(--sub);
+      line-height: 1.6;
+    }
+    .intro strong { color: var(--txt); }
+
+    /* Cards de métrica */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.2rem;
+    }
+    .card .label { font-size: 0.72rem; color: var(--sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+    .card .value { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+    .card .unit  { font-size: 0.8rem; color: var(--sub); margin-top: 0.2rem; }
+    .card.v1 .value { color: var(--red);   }
+    .card.v2 .value { color: var(--green); }
+    .card.ratio .value { color: var(--amber); }
+    .card.heap  .value { color: var(--teal-lt); }
+
+    /* Gráfico */
+    .chart-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .chart-section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      color: var(--txt);
+    }
+    .chart-section p {
+      font-size: 0.8rem;
+      color: var(--sub);
+      margin-bottom: 1.2rem;
+    }
+    .chart-wrap { position: relative; height: 320px; }
+
+    /* Tabela de log */
+    .log-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+    }
+    .log-section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.72rem;
+      color: var(--sub);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    tr:last-child td { border-bottom: none; }
+    .v1-col { color: var(--red);   }
+    .v2-col { color: var(--green); }
+    .ratio-col { color: var(--amber); font-weight: 600; }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--sub);
+      font-size: 0.9rem;
+    }
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; opacity: 0.5; }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--sub);
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">ReciLuz · Análise de Algoritmos</div>
+    <div class="subtitle">Buffer Circular O(1) vs. Array com Deslocamento O(n)</div>
+  </div>
+  <div class="badge" id="status-badge">Desconectado</div>
+</header>
+
+<main>
+  <div class="intro">
+    <strong>Vertente 1 (Ineficiente):</strong> A cada inserção num buffer cheio, todos os N elementos são deslocados à esquerda — complexidade <strong>O(n)</strong>.
+    A latência por operação cresce linearmente com N.<br><br>
+    <strong>Vertente 2 (Ring Buffer):</strong> Apenas os índices Head e Tail são incrementados — complexidade <strong>O(1)</strong>.
+    A latência permanece constante independente de N.
+    O modelo Produtor-Consumidor permite que o loop de sensores continue sem bloqueio durante o envio MQTT.
+  </div>
+
+  <div class="cards">
+    <div class="card v1">
+      <div class="label">V1 — Último (N=1000)</div>
+      <div class="value" id="card-v1">—</div>
+      <div class="unit">µs / item</div>
+    </div>
+    <div class="card v2">
+      <div class="label">V2 — Último (N=1000)</div>
+      <div class="value" id="card-v2">—</div>
+      <div class="unit">µs / item</div>
+    </div>
+    <div class="card ratio">
+      <div class="label">V1 é mais lento que V2</div>
+      <div class="value" id="card-ratio">—</div>
+      <div class="unit">× vezes</div>
+    </div>
+    <div class="card heap">
+      <div class="label">Heap Livre no ESP32</div>
+      <div class="value" id="card-heap">—</div>
+      <div class="unit">bytes</div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <h2>Latência por Operação de Inserção</h2>
+    <p>Eixo Y: tempo médio por item em µs · Eixo X: N (número de amostras no buffer)</p>
+    <div class="chart-wrap">
+      <canvas id="perf-chart"></canvas>
+    </div>
+  </div>
+
+  <div class="log-section">
+    <h2>Histórico de Benchmarks Recebidos</h2>
+    <div id="log-container">
+      <div class="empty-state">
+        <div class="icon">📡</div>
+        Aguardando dados do ESP32...<br>
+        O benchmark é executado a cada 30 segundos no firmware.
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  ReciLuz · Sistemas Embarcados · Análise de Algoritmos — conectado em <span id="broker-addr"></span>
+</footer>
+
+<script>
+  // ─── Configuração ────────────────────────────────────────────────────────────
+  const MQTT_HOST = window.location.hostname || '172.26.65.95';
+  const MQTT_PORT = 9001;
+  const BENCH_TOPIC = 'reciluz/benchmark';
+
+  document.getElementById('broker-addr').textContent = `${MQTT_HOST}:${MQTT_PORT}`;
+
+  // ─── Estado ──────────────────────────────────────────────────────────────────
+  // Mantém o resultado mais recente por valor de N
+  const latestByN = {};
+  const logRows = [];
+
+  // ─── Chart.js ────────────────────────────────────────────────────────────────
+  const ctx = document.getElementById('perf-chart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Vertente 1 — Array com Deslocamento O(n)',
+          data: [],
+          borderColor: '#e05555',
+          backgroundColor: 'rgba(224,85,85,0.08)',
+          borderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: 'Vertente 2 — Ring Buffer O(1)',
+          data: [],
+          borderColor: '#2ecc71',
+          backgroundColor: 'rgba(46,204,113,0.08)',
+          borderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          tension: 0.3,
+          fill: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      plugins: {
+        legend: {
+          labels: { color: '#94a3b8', font: { size: 12 } },
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)} µs/item`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'N (número de amostras)', color: '#94a3b8' },
+          ticks: { color: '#94a3b8' },
+          grid:  { color: 'rgba(255,255,255,0.05)' },
+        },
+        y: {
+          title: { display: true, text: 'Latência por item (µs)', color: '#94a3b8' },
+          ticks: { color: '#94a3b8' },
+          grid:  { color: 'rgba(255,255,255,0.05)' },
+          beginAtZero: true,
+        },
+      },
+    },
+  });
+
+  function refreshChart() {
+    const sorted = Object.keys(latestByN)
+      .map(Number)
+      .sort((a, b) => a - b);
+
+    chart.data.labels = sorted.map(n => `N=${n}`);
+    chart.data.datasets[0].data = sorted.map(n => latestByN[n].v1_item);
+    chart.data.datasets[1].data = sorted.map(n => latestByN[n].v2_item);
+    chart.update();
+  }
+
+  // ─── Tabela de log ───────────────────────────────────────────────────────────
+  function refreshTable() {
+    if (logRows.length === 0) return;
+
+    const container = document.getElementById('log-container');
+    const rows = logRows.slice(-20).reverse();
+
+    const html = `
+      <table>
+        <thead>
+          <tr>
+            <th>N</th>
+            <th class="v1-col">V1 Total (µs)</th>
+            <th class="v1-col">V1 / item (µs)</th>
+            <th class="v2-col">V2 Total (µs)</th>
+            <th class="v2-col">V2 / item (µs)</th>
+            <th class="ratio-col">Razão V1/V2</th>
+            <th>Heap (bytes)</th>
+            <th>Horário</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => {
+            const ratio = r.v2_item > 0 ? (r.v1_item / r.v2_item).toFixed(0) : '∞';
+            const t = new Date(r.receivedAt).toLocaleTimeString('pt-BR');
+            return `
+              <tr>
+                <td>${r.n}</td>
+                <td class="v1-col">${r.v1_us}</td>
+                <td class="v1-col">${r.v1_item.toFixed(3)}</td>
+                <td class="v2-col">${r.v2_us}</td>
+                <td class="v2-col">${r.v2_item.toFixed(3)}</td>
+                <td class="ratio-col">${ratio}×</td>
+                <td>${r.heap.toLocaleString()}</td>
+                <td>${t}</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+
+    container.innerHTML = html;
+  }
+
+  // ─── Cards de métrica ────────────────────────────────────────────────────────
+  function refreshCards() {
+    const n1000 = latestByN[1000];
+    if (!n1000) return;
+
+    document.getElementById('card-v1').textContent = n1000.v1_item.toFixed(2);
+    document.getElementById('card-v2').textContent = n1000.v2_item.toFixed(3);
+
+    const ratio = n1000.v2_item > 0
+      ? (n1000.v1_item / n1000.v2_item).toFixed(0)
+      : '∞';
+    document.getElementById('card-ratio').textContent = ratio;
+
+    // Heap vem do último dado recebido (qualquer N)
+    const lastRow = logRows[logRows.length - 1];
+    if (lastRow) {
+      document.getElementById('card-heap').textContent =
+        lastRow.heap.toLocaleString();
+    }
+  }
+
+  // ─── MQTT ────────────────────────────────────────────────────────────────────
+  const badge = document.getElementById('status-badge');
+
+  const client = mqtt.connect(`ws://${MQTT_HOST}:${MQTT_PORT}/mqtt`, {
+    clientId: 'reciluz-bench-web-' + Math.random().toString(16).slice(2, 6),
+    reconnectPeriod: 3000,
+    connectTimeout: 8000,
+  });
+
+  client.on('connect', () => {
+    badge.textContent = 'Conectado';
+    badge.className = 'badge connected';
+    client.subscribe(BENCH_TOPIC);
+  });
+
+  client.on('reconnect', () => {
+    badge.textContent = 'Reconectando…';
+    badge.className = 'badge';
+  });
+
+  client.on('offline', () => {
+    badge.textContent = 'Desconectado';
+    badge.className = 'badge';
+  });
+
+  client.on('error', () => {
+    badge.textContent = 'Erro MQTT';
+    badge.className = 'badge';
+  });
+
+  client.on('message', (topic, payload) => {
+    if (topic !== BENCH_TOPIC) return;
+    try {
+      const data = JSON.parse(payload.toString());
+      if (typeof data.n !== 'number') return;
+
+      const row = {
+        n:        data.n,
+        v1_us:    data.v1_us,
+        v2_us:    data.v2_us,
+        v1_item:  data.v1_item,
+        v2_item:  data.v2_item,
+        heap:     data.heap,
+        receivedAt: Date.now(),
+      };
+
+      latestByN[data.n] = row;
+      logRows.push(row);
+      if (logRows.length > 200) logRows.shift();
+
+      refreshChart();
+      refreshTable();
+      refreshCards();
+    } catch (_) { /* JSON inválido, ignorar */ }
+  });
+</script>
+
+</body>
+</html>
