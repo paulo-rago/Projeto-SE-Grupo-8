@@ -677,6 +677,40 @@ function SavingsRing({ pct }) {
   );
 }
 
+/* ─────────────────────────── HEALTH CARD */
+function HealthCard({ icon, iconColor, iconBg, value, unit, label, pct, barColor, stats, alert }) {
+  return (
+    <div className={`health-card${alert ? ' health-alert' : ''}`}>
+      <div className="hc-header">
+        <div className="hc-icon" style={{ background: iconBg, color: iconColor }}>{icon}</div>
+        <div>
+          <span className="hc-label">{label}</span>
+          {alert && <span className="hc-badge-alert">Alerta</span>}
+        </div>
+      </div>
+      <div className="hc-value-row">
+        <span className="hc-value">{value}</span>
+        <span className="hc-unit">{unit}</span>
+      </div>
+      {pct !== null && pct !== undefined && (
+        <div className="hc-bar-track">
+          <div className="hc-bar-fill" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: barColor }} />
+        </div>
+      )}
+      {stats && stats.length > 0 && (
+        <div className="hc-stats">
+          {stats.map((s, i) => (
+            <div key={i} className="hc-stat">
+              <strong>{s.value}</strong>
+              <span>{s.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────────────────── DASHBOARD (real API) */
 function Dashboard() {
   const [lamp, setLamp] = useState(null);
@@ -709,6 +743,21 @@ function Dashboard() {
   const avgPwmPct = onReadings.length ? Math.round(onReadings.reduce((s, r) => s + Number(r.intensidade_pwm || 0), 0) / onReadings.length / 255 * 100) : null;
   const presenceCount = readings.filter(r => r.presenca_detectada).length;
   const soundCount = readings.filter(r => r.som_detectado).length;
+
+  // health metrics
+  const temperatura = latest.temperatura !== undefined ? Number(latest.temperatura) : null;
+  const umidade = latest.umidade !== undefined ? Number(latest.umidade) : null;
+  const noiseDb = Number(latest.nivel_ruido_db || 0);
+  const noiseAlert = !!latest.som_detectado;
+  const validTemps = readings.map(r => Number(r.temperatura)).filter(v => !isNaN(v) && v > 0);
+  const avgTemp = validTemps.length ? validTemps.reduce((s, v) => s + v, 0) / validTemps.length : null;
+  const minTemp = validTemps.length ? Math.min(...validTemps) : null;
+  const maxTemp = validTemps.length ? Math.max(...validTemps) : null;
+  const validHumidity = readings.map(r => Number(r.umidade)).filter(v => !isNaN(v) && v > 0);
+  const avgHumidity = validHumidity.length ? validHumidity.reduce((s, v) => s + v, 0) / validHumidity.length : null;
+  const validNoise = readings.map(r => Number(r.nivel_ruido_db)).filter(v => !isNaN(v) && v > 0);
+  const avgNoiseDb = validNoise.length ? validNoise.reduce((s, v) => s + v, 0) / validNoise.length : null;
+  const maxNoiseDb = validNoise.length ? Math.max(...validNoise) : null;
 
   const log = useCallback((msg) => {
     const t = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -985,6 +1034,61 @@ function Dashboard() {
                   <div className="presence-fill" style={{ width: `${readings.length > 0 ? (presenceCount / readings.length) * 100 : 0}%` }} />
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* HEALTH */}
+          <section className="health-section reveal">
+            <div className="p-head">
+              <div>
+                <h3 className="p-title">Saúde Ambiental</h3>
+                <p className="health-sub">Temperatura, umidade e ruído captados pelo DHT22 e microfone</p>
+              </div>
+              <span className="p-badge">Ambiente</span>
+            </div>
+            <div className="health-grid">
+              <HealthCard
+                iconColor="#E05C3A" iconBg="rgba(224,92,58,0.10)"
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>}
+                value={temperatura !== null ? fmtNum(temperatura, 1) : '--'}
+                unit="°C"
+                label="Temperatura"
+                pct={temperatura !== null ? (temperatura / 50) * 100 : null}
+                barColor={temperatura !== null && temperatura > 35 ? '#DC2626' : temperatura !== null && temperatura > 27 ? '#F5A623' : '#1B8A8F'}
+                stats={[
+                  { value: avgTemp !== null ? fmtNum(avgTemp, 1) + '°C' : '--', label: 'média' },
+                  { value: minTemp !== null ? fmtNum(minTemp, 1) + '°C' : '--', label: 'mín' },
+                  { value: maxTemp !== null ? fmtNum(maxTemp, 1) + '°C' : '--', label: 'máx' },
+                ]}
+              />
+              <HealthCard
+                iconColor="#1B8A8F" iconBg="rgba(27,138,143,0.10)"
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>}
+                value={umidade !== null ? fmtNum(umidade, 1) : '--'}
+                unit="%"
+                label="Umidade"
+                pct={umidade !== null ? umidade : null}
+                barColor={umidade !== null && umidade > 80 ? '#1B8A8F' : umidade !== null && umidade > 60 ? '#22C55E' : '#F5A623'}
+                stats={[
+                  { value: avgHumidity !== null ? fmtNum(avgHumidity, 1) + '%' : '--', label: 'média' },
+                  { value: umidade === null ? '--' : umidade < 30 ? 'Seco' : umidade < 60 ? 'Normal' : umidade < 80 ? 'Úmido' : 'Muito úmido', label: 'nível' },
+                ]}
+              />
+              <HealthCard
+                alert={noiseAlert}
+                iconColor={noiseAlert ? '#DC2626' : '#6E5BBE'} iconBg={noiseAlert ? 'rgba(220,38,38,0.12)' : 'rgba(110,91,190,0.10)'}
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 10v4"/><path d="M6 7v10"/><path d="M10 4v16"/><path d="M14 8v8"/><path d="M18 6v12"/><path d="M22 10v4"/></svg>}
+                value={fmtNum(noiseDb, 1)}
+                unit="dB"
+                label="Nível de Ruído"
+                pct={(noiseDb / 100) * 100}
+                barColor={noiseAlert ? '#DC2626' : noiseDb > 60 ? '#F5A623' : '#6E5BBE'}
+                stats={[
+                  { value: avgNoiseDb !== null ? fmtNum(avgNoiseDb, 1) + ' dB' : '--', label: 'média' },
+                  { value: maxNoiseDb !== null ? fmtNum(maxNoiseDb, 1) + ' dB' : '--', label: 'pico' },
+                  { value: `${soundCount}/${readings.length}`, label: 'eventos' },
+                ]}
+              />
             </div>
           </section>
 
