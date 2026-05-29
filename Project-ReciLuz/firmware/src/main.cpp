@@ -12,8 +12,8 @@
 
 const char* WIFI_SSID = "uaifai-tiradentes";
 const char* WIFI_PASSWORD = "bemvindoaocesar";
-const char* BACKEND_URL = "http://172.26.65.95:1880/leituras";
-const char* MQTT_BROKER = "172.26.65.95";
+const char* BACKEND_URL = "http://172.26.69.122:1880/leituras";
+const char* MQTT_BROKER = "172.26.69.122";
 const int MQTT_PORT = 1883;
 const char* MQTT_CLIENT_ID = "reciluz-esp32-01";
 const char* MQTT_COMMAND_TOPIC    = "reciluz/lampada/1/comando";
@@ -49,8 +49,8 @@ const char* MQTT_BENCHMARK_TOPIC  = "reciluz/benchmark";
 #define BRILHO_MAXIMO 255
 #define BRILHO_SEM_PRESENCA 0
 
-#define BUFFER_SIZE 100
-#define BENCH_N_MAX 1000
+#define BUFFER_SIZE  100  // buffer operacional do sistema
+#define BENCH_WINDOW  50  // janela fixa dos buffers de benchmark (pequena para forçar shift em todo push)
 
 const unsigned long INTERVALO_ENVIO_MS         = 1500;
 const unsigned long INTERVALO_LEITURA_DHT_MS   = 2500;
@@ -307,36 +307,60 @@ void publicarLoteCircular() {
   }
 }
 
-// Benchmark comparativo entre as duas vertentes.
-// Usa buffers estáticos locais para não interferir nos buffers operacionais.
+// Benchmark comparativo — Estratégia: Janela Deslizante Saturada
+//
+// Por que buffers separados (BENCH_WINDOW) em vez de BENCH_N_MAX?
+// Com buffer grande (ex: 1001 posições) e N <= 1000, o IneffBuffer nunca
+// enche — logo nunca executa o shift, e V1 ≈ V2. O truque é usar uma
+// janela pequena (50 posições), pré-enchê-la e então cronometrar N inserções
+// num buffer JÁ CHEIO. Assim 100% das inserções disparam o O(n) no V1.
+//
+// Valores de N seguem a tabela dos requisitos AA:
+//   N=100   → diferença imperceptível (esperado pelo professor)
+//   N=5000  → atraso perceptível no V1
+//   N=20000 → alto consumo de CPU no V1 (~200ms), V2 permanece ~1ms
 void executarBenchmark(const Leitura& snap) {
-  static RingBuffer<Leitura, BENCH_N_MAX + 1>  benchCircular;
-  static IneffBuffer<Leitura, BENCH_N_MAX + 1> benchIneficiente;
+  // Buffers estáticos de janela pequena — BENCH_WINDOW posições cada
+  static RingBuffer<Leitura, BENCH_WINDOW>  benchCircular;
+  static IneffBuffer<Leitura, BENCH_WINDOW> benchIneficiente;
 
-  int valoresN[] = {10, 50, 100, 500, 1000};
+  int valoresN[] = {100, 500, 1000, 5000, 20000};
   int qtd = sizeof(valoresN) / sizeof(valoresN[0]);
 
-  Serial.println("=== BENCHMARK AA ===");
+  Serial.println("=== BENCHMARK AA (janela=" + String(BENCH_WINDOW) + ") ===");
 
   for (int i = 0; i < qtd; i++) {
     int n = valoresN[i];
+
+    // PRÉ-ENCHER: satura ambos os buffers antes de começar a cronometrar.
+    // Garante que toda inserção seguinte execute o deslocamento (V1) ou
+    // o incremento de índice (V2) — nunca o caminho "buffer vazio".
     benchCircular.clear();
     benchIneficiente.clear();
+    for (int k = 0; k < BENCH_WINDOW; k++) {
+      benchCircular.push(snap);
+      benchIneficiente.push(snap);
+    }
 
+    // CRONOMETRAR V1 (IneffBuffer O(n)):
+    // Cada push desloca BENCH_WINDOW elementos para liberar espaço — custo cresce com N
     unsigned long t1 = micros();
     for (int j = 0; j < n; j++) benchIneficiente.push(snap);
     unsigned long durV1 = micros() - t1;
 
+    // CRONOMETRAR V2 (RingBuffer O(1)):
+    // Cada push apenas incrementa _tail % BENCH_WINDOW — custo constante
     unsigned long t2 = micros();
     for (int j = 0; j < n; j++) benchCircular.push(snap);
     unsigned long durV2 = micros() - t2;
 
     float porItemV1 = (float)durV1 / n;
     float porItemV2 = (float)durV2 / n;
+    float razao     = porItemV2 > 0 ? porItemV1 / porItemV2 : 0;
     uint32_t heap   = ESP.getFreeHeap();
 
-    Serial.printf("N=%4d | V1=%6lu us | V2=%4lu us | V1/item=%.2f | V2/item=%.3f | Heap=%u\n",
-                  n, durV1, durV2, porItemV1, porItemV2, heap);
+    Serial.printf("N=%5d | V1=%7lu us (%.2f/item) | V2=%5lu us (%.3f/item) | %.0fx mais lento | Heap=%u\n",
+                  n, durV1, porItemV1, durV2, porItemV2, razao, heap);
 
     if (mqttClient.connected()) {
       String json = "{\"n\":" + String(n) +
@@ -348,7 +372,9 @@ void executarBenchmark(const Leitura& snap) {
       mqttClient.publish(MQTT_BENCHMARK_TOPIC, json.c_str());
     }
 
-    vTaskDelay(pdMS_TO_TICKS(50));
+    // Pausa para MQTT processar e não sobrecarregar; também evita watchdog reset
+    // em N=20000 onde V1 pode levar ~200ms
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 
   Serial.println("=== FIM BENCHMARK ===");
