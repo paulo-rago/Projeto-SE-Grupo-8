@@ -443,6 +443,41 @@ function SavingsRing({ pct }) {
 function HealthCard({ icon, iconColor, iconBg, value, unit, label, pct, barColor, stats, alert }) {
   return /* @__PURE__ */ React.createElement("div", { className: `health-card${alert ? " health-alert" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "hc-header" }, /* @__PURE__ */ React.createElement("div", { className: "hc-icon", style: { background: iconBg, color: iconColor } }, icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "hc-label" }, label), alert && /* @__PURE__ */ React.createElement("span", { className: "hc-badge-alert" }, "Alerta"))), /* @__PURE__ */ React.createElement("div", { className: "hc-value-row" }, /* @__PURE__ */ React.createElement("span", { className: "hc-value" }, value), /* @__PURE__ */ React.createElement("span", { className: "hc-unit" }, unit)), pct !== null && pct !== void 0 && /* @__PURE__ */ React.createElement("div", { className: "hc-bar-track" }, /* @__PURE__ */ React.createElement("div", { className: "hc-bar-fill", style: { width: `${Math.min(100, Math.max(0, pct))}%`, background: barColor } })), stats && stats.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "hc-stats" }, stats.map((s, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "hc-stat" }, /* @__PURE__ */ React.createElement("strong", null, s.value), /* @__PURE__ */ React.createElement("span", null, s.label)))));
 }
+function NewsletterSection() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const assinar = async () => {
+    if (!email) return;
+    setLoading(true);
+    try {
+      await api("/relatorio/assinar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      setStatus("ok");
+    } catch { setStatus("erro"); } finally { setLoading(false); }
+  };
+  const cancelar = async () => {
+    setLoading(true);
+    try {
+      await api("/relatorio/cancelar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      setStatus("cancel");
+    } catch { setStatus("erro"); } finally { setLoading(false); }
+  };
+  return /* @__PURE__ */ React.createElement("section", { className: "newsletter-section reveal" },
+    /* @__PURE__ */ React.createElement("div", { className: "newsletter-card" },
+      /* @__PURE__ */ React.createElement("h3", { className: "newsletter-title" }, "Relat\xF3rio Di\xE1rio por E-mail"),
+      /* @__PURE__ */ React.createElement("p", { className: "newsletter-desc" }, "Receba todo dia \xE0s 08h um resumo com temperatura, umidade, consumo e muito mais."),
+      status === "ok"     && /* @__PURE__ */ React.createElement("p", { className: "newsletter-ok" }, "Inscri\xE7\xE3o confirmada! Voc\xEA receber\xE1 relat\xF3rios di\xE1rios."),
+      status === "cancel" && /* @__PURE__ */ React.createElement("p", { className: "newsletter-ok" }, "Inscri\xE7\xE3o cancelada com sucesso."),
+      status === "erro"   && /* @__PURE__ */ React.createElement("p", { className: "newsletter-err" }, "Erro ao processar. Verifique o e-mail e tente novamente."),
+      !status && /* @__PURE__ */ React.createElement("div", { className: "newsletter-form" },
+        /* @__PURE__ */ React.createElement("input", { className: "newsletter-input", type: "email", placeholder: "seu@email.com", value: email, onChange: e => setEmail(e.target.value), onKeyDown: e => e.key === "Enter" && assinar() }),
+        /* @__PURE__ */ React.createElement("button", { className: "btn-big btn-teal-on", onClick: assinar, disabled: loading || !email }, loading ? "..." : "Assinar")
+      ),
+      status === "ok" && /* @__PURE__ */ React.createElement("button", { className: "newsletter-cancel-link", onClick: cancelar, disabled: loading }, loading ? "..." : "Cancelar inscri\xE7\xE3o"),
+      status === "erro" && /* @__PURE__ */ React.createElement("button", { className: "newsletter-cancel-link", onClick: () => setStatus(null) }, "Tentar novamente")
+    )
+  );
+}
 function Dashboard() {
   const [lamp, setLamp] = useState(null);
   const [readings, setReadings] = useState([]);
@@ -671,7 +706,7 @@ function Dashboard() {
         { value: `${soundCount}/${readings.length}`, label: "eventos" }
       ]
     }
-  ))), /* @__PURE__ */ React.createElement("footer", { className: "foot" }, /* @__PURE__ */ React.createElement("span", null, "ReciLuz Dashboard \xB7 Atualiza\xE7\xE3o a cada ", REFRESH_MS / 1e3, "s"), /* @__PURE__ */ React.createElement("span", null, "\xDAltima leitura: ", /* @__PURE__ */ React.createElement("strong", null, fmtTime(latest.criada_em)))))));
+  ))), /* @__PURE__ */ React.createElement(NewsletterSection, null), /* @__PURE__ */ React.createElement("footer", { className: "foot" }, /* @__PURE__ */ React.createElement("span", null, "ReciLuz Dashboard \xB7 Atualiza\xE7\xE3o a cada ", REFRESH_MS / 1e3, "s"), /* @__PURE__ */ React.createElement("span", null, "\xDAltima leitura: ", /* @__PURE__ */ React.createElement("strong", null, fmtTime(latest.criada_em)))))));
 }
 function SiteFooter() {
   return /* @__PURE__ */ React.createElement("footer", { className: "site-foot" }, /* @__PURE__ */ React.createElement("div", { className: "site-foot-inner" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "sf-brand" }, /* @__PURE__ */ React.createElement("span", { className: "bulb" }), " ReciLuz"), /* @__PURE__ */ React.createElement("p", { className: "sf-tag" }, "Plataforma de gest\xE3o inteligente para a ilumina\xE7\xE3o p\xFAblica do Recife. Sensores, dados e controle remoto a servi\xE7o de uma cidade mais segura e eficiente.")), /* @__PURE__ */ React.createElement("div", { className: "sf-col" }, /* @__PURE__ */ React.createElement("h4", null, "Projeto"), /* @__PURE__ */ React.createElement("ul", null, /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("a", { href: "#sobre" }, "Sobre o sistema")), /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("a", { href: "#arquitetura" }, "Arquitetura")), /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("a", { href: "#dashboard" }, "Painel ao vivo")))), /* @__PURE__ */ React.createElement("div", { className: "sf-col" }, /* @__PURE__ */ React.createElement("h4", null, "Documenta\xE7\xE3o"), /* @__PURE__ */ React.createElement("ul", null, /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("a", { href: "https://github.com/paulo-rago/Projeto-SE-Grupo-8", target: "_blank", rel: "noopener" }, "Reposit\xF3rio GitHub")), /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("a", { href: "#" }, "API \xB7 Especifica\xE7\xE3o MQTT")), /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("a", { href: "#" }, "Manual do poste"))))), /* @__PURE__ */ React.createElement("div", { className: "sf-bottom" }, /* @__PURE__ */ React.createElement("span", null, "\xA9 2026 ReciLuz \xB7 Projeto SE \u2014 Grupo 8"), /* @__PURE__ */ React.createElement("span", null, "Recife \xB7 Pernambuco \xB7 Brasil")));

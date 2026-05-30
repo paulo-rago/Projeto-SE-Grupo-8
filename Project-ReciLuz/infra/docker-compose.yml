@@ -9,6 +9,8 @@ services:
     volumes:
       - ../backend/reciluz.db:/app/reciluz.db
       - ../frontend:/app/../frontend
+    env_file:
+      - ../backend/.env
     environment:
       - DATABASE_URL=sqlite:///./reciluz.db
     restart: unless-stopped

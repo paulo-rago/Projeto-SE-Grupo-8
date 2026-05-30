@@ -66,3 +66,15 @@ class Leitura(Base):
 
     def __repr__(self):
         return f"<Leitura(id={self.id}, lampada_id={self.lampada_id}, status_lampada={self.status_lampada})>"
+
+
+class Assinante(Base):
+    __tablename__ = "assinantes"
+
+    id        = Column(Integer, primary_key=True, index=True)
+    email     = Column(String, nullable=False, unique=True, index=True)
+    ativo     = Column(Boolean, default=True, nullable=False)
+    criada_em = Column(DateTime, default=agora_recife, nullable=False)
+
+    def __repr__(self):
+        return f"<Assinante(id={self.id}, email={self.email}, ativo={self.ativo})>"

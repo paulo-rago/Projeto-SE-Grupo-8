@@ -94,3 +94,17 @@ class ErrorResponse(BaseModel):
     """
     erro: str
     detalhes: Optional[str] = None
+
+
+class AssinanteRequest(BaseModel):
+    email: str
+
+
+class AssinanteResponse(BaseModel):
+    id: int
+    email: str
+    ativo: bool
+    criada_em: datetime
+
+    class Config:
+        from_attributes = True

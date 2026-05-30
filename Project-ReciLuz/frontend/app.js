@@ -712,6 +712,88 @@ function HealthCard({ icon, iconColor, iconBg, value, unit, label, pct, barColor
 }
 
 /* ─────────────────────────── DASHBOARD (real API) */
+function NewsletterSection() {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const assinar = async () => {
+    if (!email) return;
+    setLoading(true);
+    try {
+      await api('/relatorio/assinar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      setStatus('ok');
+    } catch {
+      setStatus('erro');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelar = async () => {
+    setLoading(true);
+    try {
+      await api('/relatorio/cancelar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      setStatus('cancel');
+    } catch {
+      setStatus('erro');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="newsletter-section reveal">
+      <div className="newsletter-card">
+        <h3 className="newsletter-title">Relatório Diário por E-mail</h3>
+        <p className="newsletter-desc">
+          Receba todo dia às 08h um resumo com temperatura, umidade, consumo e muito mais.
+        </p>
+        {status === 'ok'     && <p className="newsletter-ok">Inscrição confirmada! Você receberá relatórios diários.</p>}
+        {status === 'cancel' && <p className="newsletter-ok">Inscrição cancelada com sucesso.</p>}
+        {status === 'erro'   && <p className="newsletter-err">Erro ao processar. Verifique o e-mail e tente novamente.</p>}
+        {!status && (
+          <div className="newsletter-form">
+            <input
+              className="newsletter-input"
+              type="email"
+              placeholder="seu@email.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && assinar()}
+            />
+            <button
+              className="btn-big btn-teal-on"
+              onClick={assinar}
+              disabled={loading || !email}
+            >
+              {loading ? '...' : 'Assinar'}
+            </button>
+          </div>
+        )}
+        {status === 'ok' && (
+          <button className="newsletter-cancel-link" onClick={cancelar} disabled={loading}>
+            {loading ? '...' : 'Cancelar inscrição'}
+          </button>
+        )}
+        {status === 'erro' && (
+          <button className="newsletter-cancel-link" onClick={() => setStatus(null)}>
+            Tentar novamente
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Dashboard() {
   const [lamp, setLamp] = useState(null);
   const [readings, setReadings] = useState([]);
@@ -1091,6 +1173,8 @@ function Dashboard() {
               />
             </div>
           </section>
+
+          <NewsletterSection />
 
           <footer className="foot">
             <span>ReciLuz Dashboard · Atualização a cada {REFRESH_MS / 1000}s</span>
