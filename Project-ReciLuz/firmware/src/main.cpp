@@ -50,7 +50,7 @@ const char* MQTT_BENCHMARK_TOPIC  = "reciluz/benchmark";
 #define BRILHO_SEM_PRESENCA 0
 
 #define BUFFER_SIZE  100  // buffer operacional do sistema
-#define BENCH_WINDOW  50  // janela fixa dos buffers de benchmark (pequena para forçar shift em todo push)
+#define BENCH_REPETICOES 100  // inserções cronometradas por teste (fixo); N é o tamanho do buffer que varia
 
 const unsigned long INTERVALO_ENVIO_MS         = 1500;
 const unsigned long INTERVALO_LEITURA_DHT_MS   = 2500;
@@ -307,56 +307,70 @@ void publicarLoteCircular() {
   }
 }
 
-// Benchmark comparativo — Estratégia: Janela Deslizante Saturada
+// Benchmark comparativo — Estratégia: Buffer Variável com Tamanho = N
 //
-// Por que buffers separados (BENCH_WINDOW) em vez de BENCH_N_MAX?
-// Com buffer grande (ex: 1001 posições) e N <= 1000, o IneffBuffer nunca
-// enche — logo nunca executa o shift, e V1 ≈ V2. O truque é usar uma
-// janela pequena (50 posições), pré-enchê-la e então cronometrar N inserções
-// num buffer JÁ CHEIO. Assim 100% das inserções disparam o O(n) no V1.
+// Para demonstrar O(n) vs O(1) no gráfico, o buffer é alocado dinamicamente
+// com exatamente N posições para cada valor de N testado. O número de
+// inserções cronometradas é fixo (BENCH_REPETICOES), mas o custo de cada
+// inserção cresce com N no V1 (shift de N floats via memmove) e permanece
+// constante no V2 (apenas incremento de índice).
 //
-// Valores de N seguem a tabela dos requisitos AA:
-//   N=100   → diferença imperceptível (esperado pelo professor)
-//   N=5000  → atraso perceptível no V1
-//   N=20000 → alto consumo de CPU no V1 (~200ms), V2 permanece ~1ms
+// Usa float (4 bytes) no lugar de Leitura (32 bytes) para caber no heap:
+//   N=20000 → 80 KB por buffer, alocado e liberado a cada teste.
+//
+// Curvas esperadas no gráfico:
+//   V1 (vermelho): sobe linearmente com N  → O(n)
+//   V2 (verde):    permanece próxima de 0  → O(1)
 void executarBenchmark(const Leitura& snap) {
-  // Buffers estáticos de janela pequena — BENCH_WINDOW posições cada
-  static RingBuffer<Leitura, BENCH_WINDOW>  benchCircular;
-  static IneffBuffer<Leitura, BENCH_WINDOW> benchIneficiente;
+  float sampleVal = snap.corrente;
 
   int valoresN[] = {100, 500, 1000, 5000, 20000};
   int qtd = sizeof(valoresN) / sizeof(valoresN[0]);
 
-  Serial.println("=== BENCHMARK AA (janela=" + String(BENCH_WINDOW) + ") ===");
+  Serial.println("=== BENCHMARK AA (buffer variavel, " + String(BENCH_REPETICOES) + " insercoes/teste) ===");
 
   for (int i = 0; i < qtd; i++) {
     int n = valoresN[i];
 
-    // PRÉ-ENCHER: satura ambos os buffers antes de começar a cronometrar.
-    // Garante que toda inserção seguinte execute o deslocamento (V1) ou
-    // o incremento de índice (V2) — nunca o caminho "buffer vazio".
-    benchCircular.clear();
-    benchIneficiente.clear();
-    for (int k = 0; k < BENCH_WINDOW; k++) {
-      benchCircular.push(snap);
-      benchIneficiente.push(snap);
+    // Verificar heap antes de alocar (n floats + margem de segurança)
+    if (ESP.getFreeHeap() < (uint32_t)(n * sizeof(float) + 4096)) {
+      Serial.printf("N=%5d | SKIP — heap insuficiente (%u bytes livres)\n", n, ESP.getFreeHeap());
+      continue;
     }
 
-    // CRONOMETRAR V1 (IneffBuffer O(n)):
-    // Cada push desloca BENCH_WINDOW elementos para liberar espaço — custo cresce com N
+    // ── V1: Array com Deslocamento O(n) ──────────────────────────────────
+    // memmove move (N-1) floats a cada inserção → custo proporcional a N
+    float* bufV1 = (float*)malloc(n * sizeof(float));
+    if (!bufV1) { Serial.printf("N=%5d | malloc V1 falhou\n", n); continue; }
+    for (int k = 0; k < n; k++) bufV1[k] = sampleVal;  // pré-encher
+
     unsigned long t1 = micros();
-    for (int j = 0; j < n; j++) benchIneficiente.push(snap);
+    for (int j = 0; j < BENCH_REPETICOES; j++) {
+      memmove(bufV1, bufV1 + 1, (n - 1) * sizeof(float));  // shift O(n)
+      bufV1[n - 1] = sampleVal;
+    }
     unsigned long durV1 = micros() - t1;
+    free(bufV1);
 
-    // CRONOMETRAR V2 (RingBuffer O(1)):
-    // Cada push apenas incrementa _tail % BENCH_WINDOW — custo constante
+    // ── V2: Ring Buffer O(1) ──────────────────────────────────────────────
+    // Apenas incrementa head e tail com módulo → custo constante
+    float* bufV2 = (float*)malloc(n * sizeof(float));
+    if (!bufV2) { Serial.printf("N=%5d | malloc V2 falhou\n", n); continue; }
+    size_t head = 0, tail = 0;
+    for (int k = 0; k < n; k++) { bufV2[tail] = sampleVal; tail = (tail + 1) % n; }
+
     unsigned long t2 = micros();
-    for (int j = 0; j < n; j++) benchCircular.push(snap);
+    for (int j = 0; j < BENCH_REPETICOES; j++) {
+      bufV2[tail] = sampleVal;          // O(1): escreve no tail
+      tail = (tail + 1) % n;
+      head = (head + 1) % n;
+    }
     unsigned long durV2 = micros() - t2;
+    free(bufV2);
 
-    float porItemV1 = (float)durV1 / n;
-    float porItemV2 = (float)durV2 / n;
-    float razao     = porItemV2 > 0 ? porItemV1 / porItemV2 : 0;
+    float porItemV1 = (float)durV1 / BENCH_REPETICOES;
+    float porItemV2 = (float)durV2 / BENCH_REPETICOES;
+    float razao     = porItemV2 > 0.001f ? porItemV1 / porItemV2 : 0;
     uint32_t heap   = ESP.getFreeHeap();
 
     Serial.printf("N=%5d | V1=%7lu us (%.2f/item) | V2=%5lu us (%.3f/item) | %.0fx mais lento | Heap=%u\n",
@@ -372,9 +386,8 @@ void executarBenchmark(const Leitura& snap) {
       mqttClient.publish(MQTT_BENCHMARK_TOPIC, json.c_str());
     }
 
-    // Pausa para MQTT processar e não sobrecarregar; também evita watchdog reset
-    // em N=20000 onde V1 pode levar ~200ms
-    vTaskDelay(pdMS_TO_TICKS(100));
+    // Pausa para MQTT processar entre cada N
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
 
   Serial.println("=== FIM BENCHMARK ===");
