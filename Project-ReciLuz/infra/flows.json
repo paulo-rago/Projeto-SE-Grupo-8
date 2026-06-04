@@ -109,7 +109,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://127.0.0.1:8000/leituras",
+        "url": "http://backend:8000/leituras",
         "tls": "",
         "persist": false,
         "proxy": "",
