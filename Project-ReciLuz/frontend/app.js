@@ -263,6 +263,20 @@ function Embers() {
 
 /* ─────────────────────────── HERO */
 function Hero() {
+  const [savingsPct, setSavingsPct] = useState(null);
+
+  useEffect(() => {
+    api('/leituras?limite=200').then(data => {
+      if (!data || !data.length) return;
+      const onReadings = data.filter(r => Number(r.intensidade_pwm || 0) > 0);
+      const onHours    = onReadings.length * (REFRESH_MS / 1000) / 3600;
+      const totalKwh   = data.reduce((s, r) => s + Number(r.consumo_estimado || 0), 0);
+      const refKwh     = (60 / 1000) * onHours;
+      const pct = refKwh > 0 ? Math.min(100, Math.max(0, ((refKwh - totalKwh) / refKwh) * 100)) : null;
+      if (pct !== null) setSavingsPct(Math.round(pct));
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     const hero = document.querySelector('.hero');
     const timers = [];
@@ -407,7 +421,7 @@ function Hero() {
 
       <div className="hero-stats">
         <div className="hs-item">
-          <div className="hs-num">−68%</div>
+          <div className="hs-num">{savingsPct !== null ? `−${savingsPct}%` : '−−%'}</div>
           <div className="hs-label">Energia média</div>
         </div>
         <div className="hs-div" />

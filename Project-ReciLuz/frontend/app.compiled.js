@@ -683,6 +683,18 @@ function Embers() {
 
 /* ─────────────────────────── HERO */
 function Hero() {
+  const [savingsPct, setSavingsPct] = useState(null);
+  useEffect(() => {
+    api('/leituras?limite=200').then(data => {
+      if (!data || !data.length) return;
+      const onReadings = data.filter(r => Number(r.intensidade_pwm || 0) > 0);
+      const onHours = onReadings.length * (REFRESH_MS / 1000) / 3600;
+      const totalKwh = data.reduce((s, r) => s + Number(r.consumo_estimado || 0), 0);
+      const refKwh = 60 / 1000 * onHours;
+      const pct = refKwh > 0 ? Math.min(100, Math.max(0, (refKwh - totalKwh) / refKwh * 100)) : null;
+      if (pct !== null) setSavingsPct(Math.round(pct));
+    }).catch(() => {});
+  }, []);
   useEffect(() => {
     const hero = document.querySelector('.hero');
     const timers = [];
@@ -864,7 +876,7 @@ function Hero() {
     className: "hs-item"
   }, /*#__PURE__*/React.createElement("div", {
     className: "hs-num"
-  }, "\u221268%"), /*#__PURE__*/React.createElement("div", {
+  }, savingsPct !== null ? `−${savingsPct}%` : '−−%'), /*#__PURE__*/React.createElement("div", {
     className: "hs-label"
   }, "Energia m\xE9dia")), /*#__PURE__*/React.createElement("div", {
     className: "hs-div"
