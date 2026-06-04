@@ -711,6 +711,183 @@ function HealthCard({ icon, iconColor, iconBg, value, unit, label, pct, barColor
   );
 }
 
+/* ─────────────────────────── LEGEND DRAWER */
+function LegendDrawer() {
+  const [open, setOpen] = useState(false);
+
+  const close = () => setOpen(false);
+
+  const Group = ({ icon, title, children }) => (
+    <div className="lg-group">
+      <div className="lg-group-header">
+        <span className="lg-group-icon">{icon}</span>
+        <span className="lg-group-title">{title}</span>
+      </div>
+      {children}
+    </div>
+  );
+
+  const Row = ({ term, def }) => (
+    <div className="lg-row">
+      <span className="lg-term">{term}</span>
+      <span className="lg-def">{def}</span>
+    </div>
+  );
+
+  return (
+    <>
+      <button className="legend-fab" onClick={() => setOpen(true)} aria-label="Abrir guia de leitura">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span>Guia</span>
+      </button>
+
+      {open && (
+        <div className="legend-overlay" onClick={close} role="dialog" aria-modal="true" aria-label="Guia de leitura">
+          <aside className="legend-drawer" onClick={e => e.stopPropagation()}>
+
+            {/* ── Header */}
+            <div className="lg-header">
+              <div className="lg-header-left">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{color:'var(--teal)'}}>
+                  <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <h2 className="lg-title">Guia de Leitura</h2>
+              </div>
+              <button className="lg-close" onClick={close} aria-label="Fechar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className="lg-body">
+
+              {/* ── Grupo 1: Modos */}
+              <Group title="Modos de Operação" icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+              }>
+                <Row term="Automático" def="O ESP32 ajusta o brilho pela distância do HC-SR04. Quanto mais próximo, maior a intensidade." />
+                <Row term="Controle manual" def="Ativo quando o modo automático está desativado. Permite ligar, desligar e ajustar o brilho pelo dashboard." />
+              </Group>
+
+              {/* ── Grupo 2: Métricas */}
+              <Group title="Métricas de Iluminação" icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+              }>
+                <Row term="Intensidade (%)" def="PWM ÷ 255 × 100. Potência luminosa relativa do LED." />
+                <Row term="Distância (cm)" def="Lida pelo HC-SR04. Valores baixos indicam presença próxima." />
+                <Row term="Corrente (A)" def="Medida pelo ACS712. Reflete o consumo elétrico real do LED." />
+                <Row term="Potência (W)" def="12 V × corrente lida pelo ACS712." />
+                <Row term="Consumo acum. (Wh)" def="Potência × tempo acumulado desde o início da sessão." />
+                <Row term="Economia (%)" def="Comparação com uma lâmpada de 60 W ligada continuamente no mesmo período." />
+              </Group>
+
+              {/* ── Grupo 3: Saúde ambiental */}
+              <Group title="Saúde Ambiental" icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 0v10l6.5 3.5"/>
+                </svg>
+              }>
+                <Row term="Temperatura (°C)" def="DHT22. O card exibe média, mínimo e máximo da sessão atual." />
+                <Row
+                  term="Umidade (%)"
+                  def={
+                    <span>DHT22. Classificada por faixa:
+                      <span className="lg-chip" style={{'--c':'#3b82f6','--cb':'rgba(59,130,246,0.12)'}}>Seco</span>
+                      <span className="lg-chip" style={{'--c':'#22c55e','--cb':'rgba(34,197,94,0.12)'}}>Confortável</span>
+                      <span className="lg-chip" style={{'--c':'#6366f1','--cb':'rgba(99,102,241,0.12)'}}>Úmido</span>
+                    </span>
+                  }
+                />
+                <Row term="Ruído (dB)" def="Microfone analógico. Evento registrado ao ultrapassar o limiar configurado no firmware (55 dB)." />
+              </Group>
+
+              {/* ── Grupo 4: Badges */}
+              <Group title="Badges e Status" icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              }>
+                <div className="lg-badges-grid">
+                  <div className="lg-badge-item">
+                    <span className="s-badge s-on"><span className="d"/>ESP32</span>
+                    <span className="lg-badge-desc">Microcontrolador conectado e enviando dados.</span>
+                  </div>
+                  <div className="lg-badge-item">
+                    <span className="s-badge s-on"><span className="d"/>MQTT</span>
+                    <span className="lg-badge-desc">Broker ativo, mensagens chegando em tempo real.</span>
+                  </div>
+                  <div className="lg-badge-item">
+                    <span className="s-badge" style={{background:'rgba(34,197,94,0.12)',color:'#16a34a'}}><span className="d" style={{background:'#16a34a'}}/>Presença</span>
+                    <span className="lg-badge-desc">Objeto ou pessoa detectado pelo HC-SR04.</span>
+                  </div>
+                  <div className="lg-badge-item">
+                    <span className="s-badge" style={{background:'rgba(245,166,35,0.14)',color:'#b45309'}}><span className="d" style={{background:'#f59e0b'}}/>Ligada</span>
+                    <span className="lg-badge-desc">LED com PWM {'>'} 0, emitindo luz.</span>
+                  </div>
+                  <div className="lg-badge-item">
+                    <span className="log-tag" style={{background:'rgba(44,62,107,0.10)',color:'#2C3E6B'}}>MODO PRESENÇA</span>
+                    <span className="lg-badge-desc">Evento no log: modo automático detectou presença e ajustou o brilho.</span>
+                  </div>
+                  <div className="lg-badge-item">
+                    <span className="log-tag" style={{background:'rgba(245,166,35,0.13)',color:'#92400e'}}>CMD REMOTO</span>
+                    <span className="lg-badge-desc">Evento no log: comando manual recebido pelo dashboard.</span>
+                  </div>
+                </div>
+              </Group>
+
+              {/* ── Grupo 5: Gráfico */}
+              <Group title="Gráfico de Tempo Real" icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+              }>
+                <div className="lg-chart-legend">
+                  <div className="lg-chart-row">
+                    <span className="lg-chart-dot" style={{background:'#F5A623'}}/>
+                    <div>
+                      <strong>Intensidade (%)</strong>
+                      <span>Eixo esquerdo · valor direto em %.</span>
+                    </div>
+                  </div>
+                  <div className="lg-chart-row">
+                    <span className="lg-chart-dot" style={{background:'#1B8A8F'}}/>
+                    <div>
+                      <strong>Corrente ×10 (A)</strong>
+                      <span>Eixo esquerdo · multiplicada por 10 apenas para visualização na mesma escala.</span>
+                    </div>
+                  </div>
+                  <div className="lg-chart-row">
+                    <span className="lg-chart-dot" style={{background:'#9AA4BC'}}/>
+                    <div>
+                      <strong>Distância (cm)</strong>
+                      <span>Eixo direito · escala independente.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lg-tip">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  O gráfico mantém as últimas 30 leituras (≈ 60 s). Passe o mouse sobre os pontos para ver os valores exatos.
+                </div>
+              </Group>
+
+            </div>{/* end lg-body */}
+          </aside>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ─────────────────────────── DASHBOARD (real API) */
 function NewsletterSection() {
   const [email, setEmail] = useState('');
@@ -1244,6 +1421,7 @@ function App() {
       <About />
       <Dashboard />
       <SiteFooter />
+      <LegendDrawer />
     </>
   );
 }
