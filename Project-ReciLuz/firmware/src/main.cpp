@@ -7,8 +7,8 @@
 
 const char* WIFI_SSID = "uaifai-tiradentes";
 const char* WIFI_PASSWORD = "bemvindoaocesar";
-const char* BACKEND_URL = "http://172.26.65.95:1880/leituras";
-const char* MQTT_BROKER = "172.26.65.95";
+const char* BACKEND_URL = "http://172.26.69.122:1880/leituras";
+const char* MQTT_BROKER = "172.26.69.122";
 const int MQTT_PORT = 1883;
 const char* MQTT_CLIENT_ID = "reciluz-esp32-01";
 const char* MQTT_COMMAND_TOPIC = "reciluz/lampada/1/comando";
