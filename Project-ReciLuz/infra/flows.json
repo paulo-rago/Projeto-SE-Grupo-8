@@ -160,7 +160,7 @@
         "id": "9b2d6172aeb76bae",
         "type": "mqtt-broker",
         "name": "server",
-        "broker": "127.0.0.1",
+        "broker": "mosquitto",
         "port": 1883,
         "clientid": "",
         "autoConnect": true,

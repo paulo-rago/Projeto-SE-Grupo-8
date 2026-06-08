@@ -27,6 +27,7 @@
 \usepackage{fancyhdr}
 \usepackage{titlesec}
 \usepackage{parskip}
+\usepackage{grffile}   % suporte a espaços e acentos em nomes de arquivo
 
 %── Layout ────────────────────────────────────────────────────────────────────
 \geometry{top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm}
@@ -93,10 +94,13 @@
   {\normalsize Buffer Circular \textcolor{verde}{O(1)} vs.\ Array com Deslocamento \textcolor{vermelho}{O(n)}}
 }
 \author{
-  Grupo 8 — CESAR School\\
-  \texttt{prcr@cesar.school}
+  Paulo Ricardo C. Rago \and
+  Lucca Da Veiga \and
+  Ronaldo Souto Maior \and
+  Marina Frias \and
+  Israel Erlich Neto
 }
-\date{Junho de 2026}
+\date{Junho de 2026\\[0.4em]\small Grupo 8 — CESAR School}
 
 %─────────────────────────────────────────────────────────────────────────────
 \begin{document}
@@ -153,7 +157,7 @@ acumula \emph{jitter} amostral e pode sofrer \emph{stack overflow} em
 operações com grandes buffers.
 
 A escolha da estrutura de dados que mantém o histórico de leituras é, portanto,
-um fator determinante para a estabilidade do sistema embarcado.
+um fator determinante para a estabilidade do sistema embarcado~\cite{esp32trm}.
 
 %═════════════════════════════════════════════════════════════════════════════
 \section{Análise Assintótica}
@@ -197,7 +201,7 @@ _buf[_count++] = item;           // 1 atribuicao
 \label{thm:ineff-push}
 Seja $N$ a capacidade do buffer. A operação \texttt{push()} quando o buffer
 está cheio executa exatamente $N - 1$ atribuições no laço de deslocamento
-mais uma atribuição final, totalizando $N$ atribuições.
+mais uma atribuição final, totalizando $N$ atribuições~\cite{clrs,sedgewick}.
 Portanto $T(N) = N \in \Theta(N)$.
 \end{teorema}
 
@@ -365,6 +369,35 @@ Os resultados a seguir foram medidos no ESP32-D0WD-V3 @ 240\,MHz com
     versus V2 (verde) constante próxima de zero. A linha tracejada representa
     o modelo teórico $T(n) = 0{,}245\,n$ ajustado aos dados de V1.}
   \label{fig:latencia}
+\end{figure}
+
+%─────────────────────────────────────────────────────────────────────────────
+\subsection{Dashboard de monitoramento em tempo real}
+%─────────────────────────────────────────────────────────────────────────────
+
+Os dados do benchmark são transmitidos via MQTT pelo ESP32 e exibidos em tempo
+real no dashboard web do ReciLuz (\texttt{/static/benchmark.html}).
+As Figuras~\ref{fig:dash-grafico} e~\ref{fig:dash-tabela} apresentam capturas
+de tela do dashboard durante uma execução real no ESP32-D0WD-V3 @ 240\,MHz.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{Imagem 08-06-2026 às 14.55.jpeg}
+  \caption{Dashboard ReciLuz — gráfico de latência por operação de inserção
+    em escala linear. A curva vermelha (V1) cresce proporcionalmente a $N$;
+    a linha verde (V2) permanece constante próxima de zero para todos os
+    valores de $N$ testados.}
+  \label{fig:dash-grafico}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{Imagem 08-06-2026 às 14.55 (1).jpeg}
+  \caption{Dashboard ReciLuz — histórico de benchmarks recebidos via MQTT.
+    Cada linha corresponde a um valor de $N$ medido pelo ESP32 a cada 30
+    segundos. A coluna \emph{Razão V1/V2} confirma o crescimento proporcional
+    a $N$: de 294× em $N=100$ até 69.502× em $N=20.000$.}
+  \label{fig:dash-tabela}
 \end{figure}
 
 %─────────────────────────────────────────────────────────────────────────────
@@ -553,8 +586,8 @@ rede TCP/IP do ESP-IDF continuem operando mesmo durante a alocação máxima
 \subsection{Modelo Produtor-Consumidor com FreeRTOS}
 
 O firmware adota explicitamente o padrão \emph{Produtor-Consumidor}
-implementado sobre FreeRTOS, com tarefas em núcleos físicos distintos do
-ESP32:
+implementado sobre FreeRTOS~\cite{freertos}, com tarefas em núcleos físicos
+distintos do ESP32~\cite{esp32trm}:
 
 \begin{center}
 \begin{tikzpicture}[
@@ -573,7 +606,8 @@ ESP32:
 \end{center}
 
 O \texttt{bufferCircular} (tipo \texttt{RingBuffer}) é a fronteira entre os
-dois domínios de tempo: o domínio de sensores (µs) e o domínio de rede (ms).
+dois domínios de tempo: o domínio de sensores (µs) e o domínio de rede (ms)
+via MQTT~\cite{mqtt,pubsubclient}.
 Um \texttt{SemaphoreHandle\_t} (mutex FreeRTOS) protege o acesso
 compartilhado com \emph{timeout} de 5\,ms — se a \texttt{taskMqtt}
 demorar mais que 5\,ms mantendo o mutex, a \texttt{taskSensor} prossegue
@@ -742,6 +776,56 @@ N= 5000 | V1= 122528 us (1225.28/item)| V2=   4 us (0.040/item) | 30632x
 N=20000 | V1= 490889 us (4908.89/item)| V2=   4 us (0.040/item) | 122722x
 === FIM BENCHMARK ===
 \end{lstlisting}
+
+%─────────────────────────────────────────────────────────────────────────────
+\begin{thebibliography}{99}
+
+\bibitem{clrs}
+T.~H. Cormen, C.~E. Leiserson, R.~L. Rivest e C.~Stein,
+\textit{Introduction to Algorithms}, 4ª~ed.
+MIT Press, Cambridge, MA, 2022.
+
+\bibitem{knuth}
+D.~E. Knuth,
+\textit{The Art of Computer Programming, Vol.~1: Fundamental Algorithms},
+3ª~ed.
+Addison-Wesley, Reading, MA, 1997.
+
+\bibitem{esp32trm}
+Espressif Systems,
+\textit{ESP32 Technical Reference Manual}, versão 5.3.
+Espressif Systems, Xangai, 2024.
+Disponível em: \url{https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf}.
+
+\bibitem{freertos}
+R.~Barry,
+\textit{Mastering the FreeRTOS Real Time Kernel — A Hands On Tutorial Guide}.
+Real Time Engineers Ltd., 2016.
+Disponível em: \url{https://www.freertos.org/Documentation/RTOS_book.html}.
+
+\bibitem{mqtt}
+OASIS Standard,
+\textit{MQTT Version 5.0}.
+OASIS, março de 2019.
+Disponível em: \url{https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html}.
+
+\bibitem{pubsubclient}
+N.~O'Leary,
+\textit{PubSubClient — MQTT library for Arduino}, versão 2.8.
+GitHub, 2020.
+Disponível em: \url{https://github.com/knolleary/pubsubclient}.
+
+\bibitem{sedgewick}
+R.~Sedgewick e K.~Wayne,
+\textit{Algorithms}, 4ª~ed.
+Addison-Wesley, Upper Saddle River, NJ, 2011.
+
+\bibitem{tanenbaum}
+A.~S. Tanenbaum e H.~Bos,
+\textit{Modern Operating Systems}, 4ª~ed.
+Pearson, Upper Saddle River, NJ, 2015.
+
+\end{thebibliography}
 
 %─────────────────────────────────────────────────────────────────────────────
 \end{document}
