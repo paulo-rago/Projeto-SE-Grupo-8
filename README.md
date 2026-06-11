@@ -198,6 +198,8 @@ pio run --target upload
 
 ## Relatório Diário por E-mail
 
+<img width="2034" height="1292" alt="image" src="https://github.com/user-attachments/assets/19a3c6db-92b2-49c0-8d05-a09f52bc81f1" />
+
 O sistema envia automaticamente um relatório diário com as métricas de consumo e operação para todos os assinantes cadastrados. O horário de envio é configurável pela variável `RELATORIO_HORA_ENVIO` (fuso horário de Recife). Para se inscrever:
 
 ```bash
